@@ -1,0 +1,4378 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <title>Survival Craft - Backpack Boss Hunt Edition</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #05070a;
+        }
+
+        body {
+            color: #ecf0f1;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+            position: relative;
+        }
+
+        /* ===== 画面比を固定するレターボックス表示 =====
+           #app-stage は常にデザイン時のサイズ(920px基準)で組み立て、
+           JSでウィンドウに収まる最大倍率までscale()するだけにする。
+           これにより、スマホ／タブレット／PCなど機種が変わっても
+           ゲーム内のレイアウト比率は常に同じに保たれる。 */
+        #app-stage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 20px;
+            box-sizing: content-box;
+            transform: translate(-50%, -50%) scale(1);
+            transform-origin: center center;
+        }
+
+        h1 {
+            color: #f1c40f;
+            text-shadow: 0 0 10px rgba(241, 196, 15, 0.3);
+            margin: 0 0 10px 0;
+            font-size: 1.8rem;
+        }
+
+        #game-wrapper {
+            display: flex;
+            gap: 15px;
+            width: 1260px;
+            align-items: flex-start;
+        }
+
+        #left-column {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 924px;
+        }
+
+        #status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #161b22;
+            padding: 8px 20px;
+            border-radius: 8px;
+            border: 1px solid #30363d;
+            font-size: 0.95rem;
+            font-weight: bold;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .gold-text { color: #f1c40f; }
+        .win-text { color: #2ecc71; }
+        .life-text { color: #e74c3c; }
+
+        #canvas-wrapper {
+            position: relative;
+            background: #07090e;
+            border-radius: 8px;
+            border: 2px solid #21262d;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+            overflow: hidden;
+            height: 504px;
+        }
+
+        canvas {
+            display: block;
+            touch-action: none;
+        }
+        /* ===== ゲーム画面内HUD ===== */
+        #canvas-wrapper #status-bar.in-game-hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            width: auto;
+            z-index: 5;
+            background: rgba(13, 17, 23, 0.82);
+            border: 1px solid rgba(255,255,255,0.14);
+            border-radius: 8px;
+            padding: 6px 12px;
+            box-sizing: border-box;
+            pointer-events: none;
+        }
+
+        #canvas-wrapper #control-panel.in-game-hud {
+            position: absolute;
+            left: 10px;
+            right: 10px;
+            bottom: 10px;
+            width: auto;
+            z-index: 5;
+            background: rgba(13, 17, 23, 0.88);
+            border: 1px solid rgba(255,255,255,0.14);
+            border-radius: 8px;
+            padding: 6px 8px;
+            box-sizing: border-box;
+        }
+
+        #canvas-wrapper #control-panel.in-game-hud #recipe-book {
+            max-height: 42px;
+            font-size: 0.68rem;
+            overflow-y: auto;
+            padding: 5px 7px;
+        }
+
+        #canvas-wrapper #control-panel.in-game-hud button {
+            padding: 6px 10px;
+            font-size: 0.78rem;
+            white-space: nowrap;
+        }
+
+        #canvas-wrapper #right-column.in-game-hud {
+            position: absolute;
+            top: 52px;
+            right: 10px;
+            bottom: 62px;
+            width: 205px;
+            min-height: 0;
+            height: auto;
+            z-index: 5;
+            background: rgba(13, 17, 23, 0.84);
+            border: 1px solid rgba(255,255,255,0.14);
+            border-radius: 8px;
+            padding: 9px;
+            box-sizing: border-box;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        #canvas-wrapper #right-column.in-game-hud h2 {
+            font-size: 0.9rem;
+            margin: 0 0 7px 0;
+        }
+
+        #canvas-wrapper #right-column.in-game-hud .panel-stat {
+            margin: 3px 0;
+            font-size: 0.72rem;
+            padding-bottom: 2px;
+        }
+
+        #canvas-wrapper #right-column.in-game-hud .log-box {
+            font-size: 0.65rem;
+            max-height: 78px;
+            overflow: hidden;
+        }
+
+        #canvas-wrapper #right-column.in-game-hud button {
+            pointer-events: auto;
+        }
+
+        /* HUD上のボタンだけ操作可能にする */
+        #canvas-wrapper #control-panel.in-game-hud,
+        #canvas-wrapper #right-column.in-game-hud button {
+            pointer-events: auto;
+        }
+
+        /* キャンバス上のゲーム描画が主役になるよう、HUDは少し透過 */
+        #canvas-wrapper #status-bar.in-game-hud .stat-item {
+            font-size: 0.78rem;
+        }
+
+        /* 外側レイアウトはゲーム画面中心に簡略化 */
+        #game-wrapper {
+            width: 920px;
+            display: block;
+        }
+        #left-column {
+            width: 920px;
+            display: block;
+        }
+        #left-column > #status-bar,
+        #left-column > #control-panel,
+        #game-wrapper > #right-column {
+            /* JSでcanvas-wrapperへ移動するまでのフォールバック */
+        }
+
+
+        #control-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            background: #161b22;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #30363d;
+            box-sizing: border-box;
+        }
+
+        #recipe-book {
+            font-size: 0.75rem;
+            color: #8b949e;
+            line-height: 1.4;
+            background: #0d1117;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #30363d;
+            max-height: 90px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        #right-column {
+            width: 320px;
+            background: #161b22;
+            padding: 15px;
+            border-radius: 12px;
+            border: 2px solid #30363d;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 645px;
+            box-sizing: border-box;
+        }
+
+        .panel-stat {
+            margin: 6px 0;
+            font-size: 0.85rem;
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px dashed #21262d;
+            padding-bottom: 4px;
+        }
+
+        .panel-stat span {
+            font-weight: bold;
+            color: #f0f6fc;
+        }
+
+        button {
+            background: #21262d;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        button:hover {
+            background: #30363d;
+            color: #f0f6fc;
+            border-color: #8b949e;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button.primary-btn {
+            background: #238636;
+            border-color: #2ea043;
+            color: #fff;
+            font-size: 1rem;
+            padding: 10px 24px;
+        }
+
+        button.primary-btn:hover {
+            background: #2ea043;
+        }
+
+        /* スキルショップ */
+        #recipe-book strong { color: #d8b4fe; }
+        .skill-shop-note { color: #d8b4fe; }
+
+        #tooltip {
+            position: absolute;
+            background: rgba(22, 27, 34, 0.95);
+            border: 2px solid #f1c40f;
+            border-radius: 6px;
+            padding: 8px;
+            width: 220px;
+            font-size: 0.75rem;
+            color: #ecf0f1;
+            pointer-events: none;
+            display: none;
+            z-index: 100;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        .tooltip-title {
+            font-weight: bold;
+            font-size: 0.85rem;
+            color: #f1c40f;
+            border-bottom: 1px solid #30363d;
+            padding-bottom: 4px;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .tooltip-desc {
+            color: #8b949e;
+            white-space: pre-wrap;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(13, 21, 38, 0.96);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app-stage">
+<h1>🎒 BACKPACK SURVIVAL: BOSS HUNT ⚔️</h1>
+
+<div id="game-wrapper">
+    <div id="left-column">
+        <div id="status-bar">
+            <div class="stat-item">🪙 所持金: <span id="gold-count" class="gold-text">20</span> G</div>
+            <div class="stat-item">⏱️ ラウンド: <span id="round-count">1</span></div>
+        </div>
+
+        <div id="canvas-wrapper">
+            <canvas id="gameCanvas" width="920" height="500"></canvas>
+            <div id="tooltip"></div>
+
+            <!-- ゲーム画面内HUD：既存のUIをキャンバス上に重ねて表示 -->
+            <div id="in-game-hud-anchor"></div>
+
+            <!-- キャラ選択 -->
+            <div id="char-select-overlay" class="overlay" style="padding: 20px; box-sizing: border-box; text-align: center;">
+                <h2 style="font-size: 1.8rem; margin-bottom: 5px; color: #f1c40f;">キャラクター選択</h2>
+                <p style="color: #ff7675; font-size: 0.85rem; margin-bottom: 15px;">初期ゴールド(20G)を保持して開始します</p>
+                <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; max-height: 280px; overflow-y: auto; align-items: center;">
+                    <button onclick="selectChar('bear')" style="width: 380px; text-align: left; padding: 10px; display: flex; flex-direction: column; gap: 2px;">
+                        <strong>🐻 くま (HP:200 AP:8 攻撃:30 速度:4)</strong>
+                        <span style="font-size: 0.72rem; color: #f1c40f;">📈 成長ボーナス: 武器/攻撃強化時に【攻撃力 +10】</span>
+                    </button>
+                    <button onclick="selectChar('frog')" style="width: 380px; text-align: left; padding: 10px; display: flex; flex-direction: column; gap: 2px;">
+                        <strong>🐸 かえる (HP:210 AP:12 攻撃:10 速度:20)</strong>
+                        <span style="font-size: 0.72rem; color: #f1c40f;">📈 成長ボーナス: 速度時に【速度 +6】/ AP時に【最大AP +8】</span>
+                    </button>
+                    <button onclick="selectChar('fox')" style="width: 380px; text-align: left; padding: 10px; display: flex; flex-direction: column; gap: 2px;">
+                        <strong>🦊 きつね (HP:150 AP:20 攻撃:18 速度:12)</strong>
+                        <span style="font-size: 0.72rem; color: #f1c40f;">📈 成長ボーナス: 攻撃【+3】/ 速度【+3】/ AP【+10】</span>
+                    </button>
+                    <button onclick="selectChar('penguin')" style="width: 380px; text-align: left; padding: 10px; display: flex; flex-direction: column; gap: 2px;">
+                        <strong>🐧 ぺんぎん (HP:300 AP:5 攻撃:15 速度:8)</strong>
+                        <span style="font-size: 0.72rem; color: #f1c40f;">📈 成長ボーナス: 防具/HP強化時に【最大HP +20】</span>
+                    </button>
+                    <button onclick="selectChar('dog')" style="width: 380px; text-align: left; padding: 10px; display: flex; flex-direction: column; gap: 2px;">
+                        <strong>🐶 いぬ (HP:230 AP:10 攻撃:20 速度:10)</strong>
+                        <span style="font-size: 0.72rem; color: #f1c40f;">📈 成長ボーナス: HP【+8】/ 攻撃【+5】/ AP【+4】</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- オンライン対戦マッチング演出オーバーレイ -->
+            <div id="matching-overlay" class="overlay" style="display:none; text-align: center; background: rgba(13, 27, 42, 0.98);">
+                <h1 style="color: #f1c40f; font-size: 2rem; margin-bottom: 10px; text-shadow: 0 0 10px rgba(241, 196, 15, 0.4); animation: pulse 1.5s infinite;">🌐 CONNECTING...</h1>
+                <p style="color: #8b949e; font-size: 1rem; margin-bottom: 25px;">ボスエリアに接近中...</p>
+                <div style="width: 250px; height: 6px; background: #1b263b; border-radius: 3px; overflow: hidden; margin: 0 auto 20px auto;">
+                    <div id="matching-bar" style="width: 0%; height: 100%; background: #f1c40f; transition: width 0.1s;"></div>
+                </div>
+                <p id="matching-status" style="color: #f0f6fc; font-weight: bold; font-size: 0.95rem;">対戦相手を捕捉しています...</p>
+            </div>
+
+            <!-- 擬似オンライン・トーナメント表オーバーレイ -->
+            <div id="tournament-overlay" class="overlay" style="display:none; padding: 15px; box-sizing: border-box; text-align: center; background: rgba(10, 15, 26, 0.98); overflow-y: auto;">
+                <h1 style="color: #f1c40f; font-size: 1.8rem; margin: 0 0 5px 0; text-shadow: 0 0 10px rgba(241, 196, 15, 0.4);">🌐 ONLINE TOURNAMENT ⚔️</h1>
+                <p id="tournament-stage-title" style="color: #58a6ff; font-weight: bold; font-size: 1rem; margin: 0 0 10px 0;">準々決勝 (Round of 8)</p>
+                
+                <div style="display: flex; justify-content: center; align-items: center; gap: 20px; margin-bottom: 15px; width: 100%; max-width: 860px; overflow-x: auto;">
+                    <!-- 1回戦 -->
+                    <div style="display: flex; flex-direction: column; gap: 25px; text-align: left; width: 220px;">
+                        <div style="font-size: 0.72rem; color: #8b949e; text-align: center; font-weight: bold; border-bottom: 1px solid #30363d; padding-bottom: 2px;">1回戦 (Quarterfinals)</div>
+                        <div id="match-q1" style="background: #161b22; border: 1px solid #30363d; padding: 8px; border-radius: 6px; font-size: 0.75rem;"></div>
+                        <div id="match-q2" style="background: #161b22; border: 1px solid #30363d; padding: 8px; border-radius: 6px; font-size: 0.75rem;"></div>
+                        <div id="match-q3" style="background: #161b22; border: 1px solid #30363d; padding: 8px; border-radius: 6px; font-size: 0.75rem;"></div>
+                        <div id="match-q4" style="background: #161b22; border: 1px solid #30363d; padding: 8px; border-radius: 6px; font-size: 0.75rem;"></div>
+                    </div>
+                    
+                    <!-- 準決勝 -->
+                    <div style="display: flex; flex-direction: column; gap: 95px; text-align: left; width: 220px;">
+                        <div style="font-size: 0.72rem; color: #8b949e; text-align: center; font-weight: bold; border-bottom: 1px solid #30363d; padding-bottom: 2px;">準決勝 (Semifinals)</div>
+                        <div id="match-s1" style="background: #161b22; border: 1px solid #30363d; padding: 8px; border-radius: 6px; font-size: 0.75rem;"></div>
+                        <div id="match-s2" style="background: #161b22; border: 1px solid #30363d; padding: 8px; border-radius: 6px; font-size: 0.75rem;"></div>
+                    </div>
+                    
+                    <!-- 決勝 -->
+                    <div style="display: flex; flex-direction: column; gap: 40px; text-align: left; width: 220px; align-items: center; justify-content: center;">
+                        <div style="font-size: 0.72rem; color: #8b949e; text-align: center; font-weight: bold; border-bottom: 1px solid #30363d; padding-bottom: 2px; width: 100%;">決勝 (Finals)</div>
+                        <div id="match-f1" style="background: #161b22; border: 1px solid #30363d; padding: 8px; border-radius: 6px; font-size: 0.75rem; width: 100%; box-sizing: border-box;"></div>
+                        
+                        <div style="text-align: center; margin-top: 10px; background: #1b222c; border: 1px dashed #ffd700; padding: 8px 15px; border-radius: 8px;">
+                            <span style="font-size: 1.4rem; filter: drop-shadow(0 0 5px rgba(254,215,0,0.5));">🏆</span>
+                            <div style="font-size: 0.7rem; color: #8b949e; margin-top: 2px;">トーナメント優勝者</div>
+                            <div id="tournament-winner-name" style="font-size: 0.85rem; font-weight: bold; color: #f1c40f; margin-top: 2px;">? ? ?</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <p id="tournament-bracket-status" style="color: #f0f6fc; font-weight: bold; font-size: 0.85rem; margin: 0 0 10px 0;">サーバー同期中...</p>
+                <button id="start-match-btn" onclick="startCurrentTournamentMatch()" style="background:#238636; color:#fff; font-size: 1rem; padding: 10px 24px; display: none; margin: 0 auto; box-shadow: 0 0 15px rgba(35,134,54,0.4);">⚔️ 对戦を開始する</button>
+            </div>
+
+            <!-- タイマンターン制バトルコントロール -->
+            <div id="duel-controls-overlay" class="overlay" style="display:none; padding: 15px; box-sizing: border-box; flex-direction: column; justify-content: space-between; align-items: center; background: rgba(13, 21, 38, 0.90);">
+                <div style="width: 100%; text-align: center;">
+                    <h2 style="color: #ff7675; font-size: 1.3rem; margin: 0 0 5px 0;">⚔️ BOSS DUEL ⚔️</h2>
+                    <div id="duel-turn-indicator" style="font-size: 0.95rem; font-weight: bold; padding: 4px 12px; border-radius: 4px; display: inline-block; background: #2ea043; color: #fff; margin-bottom: 5px;">あなたのターン</div>
+                </div>
+
+                <!-- Rival Display -->
+                <div style="width: 100%; background: #161b22; border: 1px solid #e74c3c; padding: 6px; border-radius: 8px; box-sizing: border-box;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                        <span id="duel-rival-name" style="font-weight: bold; color: #ff7675; font-size: 0.85rem;">🔴 对戦相手</span>
+                        <span id="duel-rival-hp-text" style="font-size: 0.75rem; color: #f0f6fc;">HP: 100/100</span>
+                    </div>
+                    <div style="width: 100%; height: 6px; background: #010409; border-radius: 3px; overflow: hidden; margin-bottom: 4px;">
+                        <div id="duel-rival-hp-bar" style="width: 100%; height: 100%; background: #e74c3c; transition: width 0.3s;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                        <span style="font-weight: bold; color: #f1c40f; font-size: 0.82rem;">⚡ 相手AP</span>
+                        <span id="duel-rival-ap-text" style="font-size: 0.75rem; color: #f0f6fc;">AP: 100/100</span>
+                    </div>
+                    <div style="width: 100%; height: 6px; background: #010409; border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
+                        <div id="duel-rival-ap-bar" style="width: 100%; height: 100%; background: #e67e22; transition: width 0.3s;"></div>
+                    </div>
+                    <div style="background: #2a1b1b; border: 1px dashed #e74c3c; padding: 5px; border-radius: 4px; font-size: 0.72rem; color: #f1c40f; text-align: center;">
+                        🔮 行動予兆: <strong id="duel-rival-intent-text">通常攻撃</strong>
+                    </div>
+                </div>
+
+                <!-- Player Display -->
+                <div style="width: 100%; background: #161b22; border: 1px solid #58a6ff; padding: 6px; border-radius: 8px; box-sizing: border-box;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                        <span style="font-weight: bold; color: #58a6ff; font-size: 0.85rem;">🔵 あなた</span>
+                        <span id="duel-player-hp-text" style="font-size: 0.75rem; color: #f0f6fc;">HP: 100/100</span>
+                    </div>
+                    <div style="width: 100%; height: 6px; background: #010409; border-radius: 3px; overflow: hidden; margin-bottom: 4px;">
+                        <div id="duel-player-hp-bar" style="width: 100%; height: 100%; background: #2ecc71; transition: width 0.3s;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                        <span style="font-weight: bold; color: #f1c40f; font-size: 0.82rem;">⚡ AP</span>
+                        <span id="duel-player-ap-text" style="font-size: 0.75rem; color: #f0f6fc;">AP: 100/100</span>
+                    </div>
+                    <div style="width: 100%; height: 6px; background: #010409; border-radius: 3px; overflow: hidden;">
+                        <div id="duel-player-ap-bar" style="width: 100%; height: 100%; background: #f1c40f; transition: width 0.3s;"></div>
+                    </div>
+                </div>
+
+                <!-- 動的アクションボタンエリア -->
+                <div id="duel-actions-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; width: 100%; margin-top: 5px; max-height: 110px; overflow-y: auto;">
+                    <!-- JavaScript側から動的に武器ボタンを配置します -->
+                </div>
+            </div>
+
+            <!-- タイマン勝利オーバーレイ -->
+            <div id="victory-overlay" class="overlay" style="display:none; text-align: center; background: rgba(13, 37, 23, 0.98);">
+                <h1 style="color: #2ecc71; font-size: 2.2rem; margin-bottom: 5px; text-shadow: 0 0 15px rgba(46, 204, 113, 0.5);">⚔️ VICTORY! ⚔️</h1>
+                <p style="color: #f1c40f; font-weight: bold; font-size: 1.1rem; margin-bottom: 10px;">タイマン対戦に勝利しました！</p>
+                <p style="color: #8b949e; font-size: 0.85rem; margin-bottom: 25px; padding: 0 20px;">今まで育て上げたキャラクターが最強であることを証明しました！</p>
+                <button onclick="nextSeason()" style="background:#238636; color:#fff; font-size: 1.1rem; padding: 12px 24px;">🏆 強くて次のシーズンを開始する</button>
+            </div>
+
+            <div id="menu-overlay" class="overlay" style="display:none;padding:20px;box-sizing:border-box;text-align:center;"><div style="width:min(520px,92%);max-height:90%;overflow:auto;background:#161b22;border:2px solid #58a6ff;border-radius:14px;padding:18px;box-sizing:border-box;"><h2 style="margin:0 0 12px;color:#58a6ff;">☰ メニュー</h2><div id="menu-status" style="text-align:left;line-height:1.7;font-size:.85rem;"></div><hr style="border:0;border-top:1px solid #30363d;margin:12px 0;"><div style="text-align:left;font-size:.78rem;color:#8b949e;line-height:1.6;">🗺️ 探索：分岐は↑↓、進行は→。スマホでは画面下のボタンを使用。<br>✨ スキルショップ：「✨ スキル解禁」マスに止まると利用可能。<br>💰×2 / 💰×3：所持ゴールドを倍率分増やします。<br>💰÷2：所持ゴールドが半分になります。<br>⚔️ 決戦スキル：強力な代わりにクールダウンがあります。</div><button onclick="toggleMenu()" style="width:100%;margin-top:14px;justify-content:center;">閉じる</button></div></div>
+            <div id="mobile-controls" style="display:none;position:absolute;left:50%;bottom:74px;transform:translateX(-50%);z-index:8;gap:8px;align-items:center;"><button onclick="mobileExploreInput('up')">▲</button><button onclick="mobileExploreInput('down')">▼</button><button onclick="mobileExploreInput('right')" style="background:#238636;border-color:#2ea043;">▶ 進む</button></div><button id="menu-open-btn" onclick="toggleMenu()" style="position:absolute;top:8px;right:8px;z-index:9;padding:7px 11px;font-size:.78rem;">☰ メニュー</button>
+            <!-- ゲームオーバー -->
+            <div id="game-over-overlay" class="overlay" style="display:none;">
+                <h1 id="game-result-title" style="color: #f85149;">GAME OVER</h1>
+                <p style="margin-bottom: 20px;">生存ターン数: <span id="result-wave" style="color:#58a6ff; font-weight:bold;">1</span></p>
+                <button onclick="restartGame()" style="background:#238636; color:#fff;">リベンジする</button>
+            </div>
+        </div>
+
+        <div id="control-panel">
+            <button id="reroll-btn" onclick="rerollShop()"><span style="font-size:1.1rem;">🔄</span> ショップ更新 (1G)</button>
+            
+            <div id="recipe-book">
+                <strong>📖 スキルについて:</strong><br>
+                ・ショップの商品はすべて「スキル」です。購入すると即座に習得します。<br>
+                ・習得したスキルは売却・配置・合成不要で、そのままステータスに加算されます。<br>
+                ・「決戦スキル」（二段攻撃など）は対戦中に専用の行動ボタンが追加されます。<br>
+                ・同じスキルを何度でも習得でき、効果はそのたびに重複します。<br>
+                ・累計6回スキルを習得するごとに、ショップの枠が1つ増えます（最大10枠）。
+            </div>
+
+            <button id="action-btn" class="primary-btn" onclick="handleActionButton()">🗺️ 探索を開始！</button>
+        </div>
+    </div>
+
+    <!-- 右側カラム: 各種ステータスパネル -->
+    <div id="right-column">
+        <div>
+            <h2>MY STATUS</h2>
+            <div style="background: #1f232a; border-radius: 6px; padding: 8px; margin-bottom: 12px; border: 1px solid #30363d; font-size: 0.85rem; display: flex; flex-direction: column; gap: 4px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    使用キャラ <span id="ui-char" style="color: #58a6ff; font-weight: bold;">未選択</span>
+                </div>
+                <!-- プレイ中成長ボーナス表示用のエリアを追加 -->
+                <div id="ui-growth-desc" style="font-size: 0.72rem; color: #f1c40f; text-align: left; border-top: 1px dashed #30363d; padding-top: 4px; display: none;"></div>
+            </div>
+
+            <div class="panel-stat">現在のターン <span>⏱️ <span id="ui-turn" style="color:#58a6ff;">1</span> / <span id="ui-turn-max">1</span></span></div>
+            <div class="panel-stat">環境 <span>🏕️ <span id="ui-env">ノーマル</span></span></div>
+            <div class="panel-stat">HP <span style="color:#2ecc71;">❤️ <span id="ui-hp">100</span> / <span id="ui-maxhp">100</span></span></div>
+            <div class="panel-stat">AP <span style="color:#f1c40f;">⚡ <span id="ui-ap">100</span> / <span id="ui-maxap">100</span></span></div>
+            <div class="panel-stat">攻撃力 <span>⚔️ <span id="ui-atk">10</span></span></div>
+            <div class="panel-stat">速度 <span>🏃 <span id="ui-speed">10</span></span></div>
+            <!-- 【追加】会心率表示エリア -->
+            <div class="panel-stat">会心率 <span>🎯 <span id="ui-crit" style="color:#ff7675;">5</span>%</span></div>
+            <div class="panel-stat">習得スキル <span>✨ <span id="ui-skill-count">0</span></span></div>
+            <div class="panel-stat" id="gathering-moves-stat" style="display:none;">探索移動 <span>👣 <span id="ui-moves-left" style="color:#58a6ff;">20</span> / <span id="ui-moves-max">20</span></span></div>
+            
+            <button id="end-turn-btn" onclick="endPlayerTurnHand()" style="display: none; width: 100%; margin-top: 15px; background: #85144b; color: #fff; border: 1px solid #b10dc9; border-radius: 6px; padding: 8px; font-weight: bold; cursor: pointer;">⏩ 探索を切り上げて準備へ</button>
+        </div>
+
+        <div>
+            <hr style="border: 0; border-top: 1px solid #30363d; margin: 10px 0;">
+            <div class="log-box" id="game-log">キャラクターを選択して開始してください。</div>
+        </div>
+    </div>
+</div>
+</div>
+
+<script>
+    // 既存UIをゲーム画面の中へ移動してHUD化する
+    // DOM IDはそのままなので、既存JavaScriptの参照を壊さない。
+    // ===== 画面比固定（レターボックス）スケーリング =====
+    // #app-stage は常に同じ内部レイアウト(920px基準)で組み立てられているため、
+    // ウィンドウサイズに応じて scale() だけを変更すれば、
+    // どの機種で開いても縦横比・レイアウトが崩れずに収まる。
+    (function setupResponsiveStage() {
+        const stage = document.getElementById('app-stage');
+        if (!stage) return;
+
+        function fitStage() {
+            // 一旦スケールをリセットして、素の(デザイン時)サイズを計測する
+            stage.style.transform = 'translate(-50%, -50%) scale(1)';
+            const naturalW = stage.offsetWidth;
+            const naturalH = stage.offsetHeight;
+            if (!naturalW || !naturalH) return;
+
+            const margin = 0.98; // 画面端ギリギリにならないよう少し余白を残す
+            const scale = Math.min(
+                (window.innerWidth / naturalW) * margin,
+                (window.innerHeight / naturalH) * margin
+            );
+            stage.style.transform = `translate(-50%, -50%) scale(${scale})`;
+        }
+
+        window.addEventListener('resize', fitStage);
+        window.addEventListener('orientationchange', fitStage);
+        fitStage();
+        // フォントや画像の読み込み後にサイズが変わる場合があるため、少し遅延して再計測
+        setTimeout(fitStage, 200);
+        setTimeout(fitStage, 800);
+    })();
+
+    (function setupInGameHUD() {
+        const canvasWrapper = document.getElementById('canvas-wrapper');
+        const statusBar = document.getElementById('status-bar');
+        const controlPanel = document.getElementById('control-panel');
+        const rightColumn = document.getElementById('right-column');
+
+        if (!canvasWrapper || !statusBar || !controlPanel || !rightColumn) return;
+
+        canvasWrapper.appendChild(statusBar);
+        canvasWrapper.appendChild(rightColumn);
+        canvasWrapper.appendChild(controlPanel);
+
+        statusBar.classList.add('in-game-hud');
+        rightColumn.classList.add('in-game-hud');
+        controlPanel.classList.add('in-game-hud');
+    })();
+
+    const GRID = 10; 
+    const CHUNK_SIZE = 10; 
+    const SIZE = 64; 
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const tooltip = document.getElementById('tooltip');
+
+    // キャラクターテンプレート初期パラメータ
+    const CHAR_TEMPLATES = {
+        bear: { name: "くま", hp: 200, ap: 8, atk: 30, speed: 4, icon: "🐻", growHp: 0, growAtk: 10, growSpeed: 0, growAp: 0 },
+        frog: { name: "かえる", hp: 210, ap: 12, atk: 10, speed: 20, icon: "🐸", growHp: 0, growAtk: 0, growSpeed: 6, growAp: 8 },
+        fox: { name: "きつね", hp: 150, ap: 20, atk: 18, speed: 12, icon: "🦊", growHp: 0, growAtk: 3, growSpeed: 3, growAp: 10 },
+        penguin: { name: "ぺんぎん", hp: 300, ap: 5, atk: 15, speed: 8, icon: "🐧", growHp: 20, growAtk: 0, growSpeed: 0, growAp: 0 },
+        dog: { name: "いぬ", hp: 230, ap: 10, atk: 20, speed: 10, icon: "🐶", growHp: 8, growAtk: 5, growSpeed: 0, growAp: 4 }
+    };
+
+    const ENEMY_TYPES = [
+        { name: "スライム", hpMul: 0.3, atkMul: 0.2, speed: 1, color: "#2ecc71" },
+        { name: "ゴブリン", hpMul: 0.5, atkMul: 0.4, speed: 2, color: "#e67e22" },
+        { name: "ゴーレム", hpMul: 0.8, atkMul: 0.5, speed: 1, color: "#95a5a6" },
+        { name: "ドラゴン", hpMul: 1.1, atkMul: 0.7, speed: 1, color: "#e74c3c" }
+    ];
+
+    const CELL_INFOS = {
+        1: { color: "#2ea043", text: "🌲" },
+        2: { color: "#8b949e", text: "🪨" },
+        6: { color: "#27ae60", text: "🌵" },
+        13: { color: "#d35400", text: "🔥" }
+    };
+
+    // --- スキルショップデータ ---
+    // ショップで購入したスキルはバックパックを使わず、即座にプレイヤーへ永続適用されます。
+    const SKILL_TEMPLATES = {
+        iron_body: {
+            id: 'iron_body', name: "鋼の肉体", icon: "💪", cost: 10, type: 'skill',
+            hp: 30, desc: "最大HPが30上昇する。"
+        },
+        vitality: {
+            id: 'vitality', name: "生命力強化", icon: "❤️", cost: 15, type: 'skill',
+            hp: 50, desc: "最大HPが50上昇する。"
+        },
+        power: {
+            id: 'power', name: "怪力", icon: "⚔️", cost: 11, type: 'skill',
+            atk: 5, desc: "攻撃力が5上昇する。"
+        },
+        mighty_power: {
+            id: 'mighty_power', name: "剛力", icon: "🔥", cost: 20, type: 'skill',
+            atk: 10, desc: "攻撃力が10上昇する。"
+        },
+        swift: {
+            id: 'swift', name: "俊足", icon: "🏃", cost: 11, type: 'skill',
+            speed: 4, desc: "速度が4上昇する。"
+        },
+        sonic_step: {
+            id: 'sonic_step', name: "音速歩法", icon: "💨", cost: 20, type: 'skill',
+            speed: 8, desc: "速度が8上昇する。"
+        },
+        mana: {
+            id: 'mana', name: "魔力増幅", icon: "🔮", cost: 11, type: 'skill',
+            ap: 15, desc: "最大APが15上昇する。"
+        },
+        arcane_core: {
+            id: 'arcane_core', name: "魔力核", icon: "✨", cost: 20, type: 'skill',
+            ap: 30, desc: "最大APが30上昇する。"
+        },
+        critical_eye: {
+            id: 'critical_eye', name: "会心の眼", icon: "🎯", cost: 14, type: 'skill',
+            crit: 4, desc: "会心率が4%上昇する。"
+        },
+        lucky_star: {
+            id: 'lucky_star', name: "幸運星", icon: "🌟", cost: 24, type: 'skill',
+            crit: 8, desc: "会心率が8%上昇する。"
+        },
+        balanced: {
+            id: 'balanced', name: "万能強化", icon: "⚖️", cost: 19, type: 'skill',
+            hp: 20, atk: 3, speed: 2, ap: 10, desc: "最大HP+20、攻撃力+3、速度+2、最大AP+10。"
+        },
+        warrior_spirit: {
+            id: 'warrior_spirit', name: "戦士の心得", icon: "🗡️", cost: 25, type: 'skill',
+            hp: 25, atk: 8, desc: "最大HPが25、攻撃力が8上昇する。"
+        },
+        guardian_spirit: {
+            id: 'guardian_spirit', name: "守護の心得", icon: "🛡️", cost: 22, type: 'skill',
+            hp: 80, speed: -1, desc: "最大HPが80上昇するが、速度が1低下する。"
+        },
+        quick_mind: {
+            id: 'quick_mind', name: "俊敏な思考", icon: "🧠", cost: 22, type: 'skill',
+            speed: 3, ap: 25, desc: "速度が3、最大APが25上昇する。"
+        },
+        champion: {
+            id: 'champion', name: "英雄の資質", icon: "👑", cost: 38, type: 'skill',
+            hp: 50, atk: 7, speed: 3, ap: 20, crit: 3,
+            desc: "最大HP+50、攻撃力+7、速度+3、最大AP+20、会心率+3%。"
+        },
+        limit_break: {
+            id: 'limit_break', name: "限界突破", icon: "💥", cost: 48, type: 'skill',
+            hp: 100, atk: 15, ap: 40, desc: "最大HP+100、攻撃力+15、最大AP+40。"
+        },
+
+        // --- 新規追加スキル ---
+        adamant_will: {
+            id: 'adamant_will', name: "不動の意志", icon: "🪨", cost: 14, type: 'skill',
+            hp: 15, crit: 3, desc: "最大HPが15、会心率が3%上昇する。"
+        },
+        gale_mastery: {
+            id: 'gale_mastery', name: "疾風の心得", icon: "🌪️", cost: 19, type: 'skill',
+            speed: 6, crit: 3, desc: "速度が6、会心率が3%上昇する。"
+        },
+        arcane_marksman: {
+            id: 'arcane_marksman', name: "魔弾の使い手", icon: "🏹", cost: 21, type: 'skill',
+            ap: 20, crit: 5, desc: "最大APが20、会心率が5%上昇する。"
+        },
+        battle_hardened: {
+            id: 'battle_hardened', name: "百戦錬磨", icon: "🎖️", cost: 21, type: 'skill',
+            atk: 6, speed: 2, crit: 2, desc: "攻撃力が6、速度が2、会心率が2%上昇する。"
+        },
+        heavy_armor: {
+            id: 'heavy_armor', name: "重装の心得", icon: "🛡️", cost: 16, type: 'skill',
+            hp: 45, speed: -2, desc: "最大HPが45上昇するが、速度が2低下する。"
+        },
+        omniscience: {
+            id: 'omniscience', name: "全知全能", icon: "🌌", cost: 70, type: 'skill',
+            hp: 70, atk: 12, speed: 5, ap: 35, crit: 6,
+            desc: "最大HP+70、攻撃力+12、速度+5、最大AP+35、会心率+6%。全スキル中最高峰の一枚。"
+        },
+
+        // --- 決戦用アクティブスキル（対戦中に新しい行動ボタンが増える） ---
+        double_strike: {
+            id: 'double_strike', name: "二段攻撃", icon: "⚔️⚔️", cost: 24, type: 'duel_skill',
+            duelAction: 'double_strike', tag: '決戦スキル',
+            desc: "【決戦専用】習得すると対戦中に「二段攻撃」が使えるようになる。\n通常より多くAPを消費する代わりに、武器の攻撃を続けて2回叩き込む（会心も2回判定）。"
+        },
+        power_smash: {
+            id: 'power_smash', name: "渾身の一撃", icon: "💥⚔️", cost: 26, type: 'duel_skill',
+            duelAction: 'power_smash', tag: '決戦スキル',
+            desc: "【決戦専用】習得すると対戦中に「渾身の一撃」が使えるようになる。\nAPを大きく消費する代わりに、通常の約2倍のダメージを叩き出す大技。"
+        },
+        life_drain_strike: {
+            id: 'life_drain_strike', name: "生命奪取の一撃", icon: "🩸⚔️", cost: 22, type: 'duel_skill',
+            duelAction: 'life_drain', tag: '決戦スキル',
+            desc: "【決戦専用】習得すると対戦中に「生命奪取の一撃」が使えるようになる。\n与えたダメージの30%を自身のHPとして吸収する攻撃。"
+        }
+        ,piercing_thrust:{id:'piercing_thrust',name:'貫通突き',icon:'🗡️💫',cost:30,type:'duel_skill',duelAction:'piercing_thrust',tag:'決戦スキル',desc:'【決戦専用】防御を無視する強力な一撃。'}
+        ,emergency_heal:{id:'emergency_heal',name:'緊急治療',icon:'💚✨',cost:34,type:'duel_skill',duelAction:'emergency_heal',tag:'決戦スキル',desc:'【決戦専用】HPを最大HPの20%回復。'}
+    };
+
+    const SKILL_KEYS = Object.keys(SKILL_TEMPLATES);
+
+    // --- バックパックアイテムデータ ---
+    const ITEM_TEMPLATES = {
+        sword: { id: 'sword', name: "木刀", icon: "⚔️", w: 1, h: 2, cost: 3, type: 'weapon', damage: 6, apCost: 12, color: "#bdc3c7", adjacentSynergy: true, desc: "基本的な武器。\n隣接する「砥石」1つにつき、攻撃力+2" },
+        whetstone: { id: 'whetstone', name: "砥石", icon: "🪨", w: 1, h: 1, cost: 2, type: 'passive', color: "#7f8c8d", adjacentSynergy: true, desc: "武器の強化用。隣接する武器の攻撃力を常時+2" },
+        hero_sword: { id: 'hero_sword', name: "勇者の剣", icon: "🗡️", w: 1, h: 2, cost: 6, type: 'weapon', damage: 10, apCost: 20, color: "#f1c40f", adjacentSynergy: true, desc: "【合成武器】\n強力な上級剣。隣接する「砥石」1つにつき、攻撃力がさらに+3" },
+        shield: { id: 'shield', name: "木の盾", icon: "🛡️", w: 2, h: 2, cost: 4, type: 'shield', shieldGain: 10, color: "#d35400", adjacentSynergy: true, desc: "防具。最大HP+10。\n隣接する「ニンニク」1つにつき、最大HP+4" },
+        collar: { id: 'collar', name: "トゲの首輪", icon: "🦴", w: 2, h: 1, cost: 3, type: 'passive', color: "#95a5a6", desc: "物理接触時に鋭いトゲで反撃。敵から攻撃を受けた際、5ダメージの確定カウンターを与える。" },
+        spiked_shield: { id: 'spiked_shield', name: "スパイクシールド", icon: "🔱", w: 2, h: 2, cost: 8, type: 'shield', shieldGain: 18, color: "#e67e22", desc: "【合成防具】\n最大HP+18。攻撃を受けた際、敵に10ダメージの痛烈なカウンターを与える。" },
+        garlic: { id: 'garlic', name: "ニンニク", icon: "🧄", w: 1, h: 1, cost: 2, type: 'active', color: "#ecf0f1", adjacentSynergy: true, desc: "周囲に常時オーラを展開。\n隣接する盾の最大HP上昇量を増やす。" },
+        banana: { id: 'banana', name: "バナナ", icon: "🍌", w: 1, h: 1, cost: 2, type: 'food', heal: 5, color: "#f1c40f", desc: "栄養満点のフルーツ。最大HP+10、最大AP+5。" },
+        pan: { id: 'pan', name: "フライパン", icon: "🍳", w: 2, h: 1, cost: 3, type: 'weapon', damage: 5, apCost: 10, color: "#34495e", adjacentSynergy: true, desc: "振り回すフライパン。隣接する食べ物1つにつき、攻撃力がさらに+2" },
+        poison_apple: { id: 'poison_apple', name: "毒リンゴ", icon: "🍏", w: 1, h: 1, cost: 2, type: 'food', color: "#2ecc71", desc: "毒を秘めたリンゴ。最大AP+10。探索中、周囲1マスの敵に毎秒3ダメージを与える。" },
+        poison_dagger: { id: 'poison_dagger', name: "毒のダガー", icon: "🗡️💚", w: 1, h: 1, cost: 5, type: 'weapon', damage: 6, apCost: 14, color: "#2ecc71", desc: "【合成武器】\n毒を塗った暗殺用ダガー。攻撃時に追加で5ダメージの毒追撃を確定で与える。" },
+        potion: { id: 'potion', name: "回復薬", icon: "🧪", w: 1, h: 1, cost: 3, type: 'potion', color: "#e74c3c", desc: "元気の出る薬。調合により最大HP+15。" },
+        piggy: { id: 'piggy', name: "ブタの貯金箱", icon: "🐷", w: 1, h: 2, cost: 3, type: 'passive', color: "#ff9ff3", desc: "準備フェーズに移行時、現在のコインの+5％追加。" },
+        key: { id: 'key', name: "グリッドの鍵", icon: "🗝️", w: 1, h: 1, cost: 2, type: 'utility', color: "#1abc9c", desc: "購入すると「ロックされたマス」を1つ永久に解放できる。" },
+        royal_key: { id: 'royal_key', name: "黄金のマスターキー", icon: "🗝️✨", w: 1, h: 1, cost: 5, type: 'utility', color: "#ffd700", desc: "購入すると「ロックされたマス」を2つ永久に解放できる。" },
+        magnet: { id: 'magnet', name: "お古の磁石", icon: "🧲", w: 1, h: 1, cost: 2, type: 'passive', color: "#e74c3c", desc: "探索中、磁力により歩くだけで周囲1マスの障害物（木や石）を自動的に採掘する。" },
+
+        // --- 追加ショップアイテム ---
+        ice_crystal: { id: 'ice_crystal', name: "氷 of 結晶", icon: "❄️", w: 1, h: 1, cost: 2, type: 'passive', color: "#74b9ff", desc: "冷気の結晶。プレイヤーの速度+2。探索フェーズで、周囲1マスの敵の速度を低下させる。" },
+        frozen_meat: { id: 'frozen_meat', name: "冷凍肉", icon: "🥩", w: 2, h: 1, cost: 3, type: 'weapon', damage: 4, apCost: 16, color: "#0984e3", adjacentSynergy: true, desc: "カチコチの肉。攻撃した際、敵を一時的に「凍結（スタン）」状態にし行動を縛る。" },
+        fairy_bottle: { id: 'fairy_bottle', name: "妖精のボトル", icon: "🧚‍♀️", w: 1, h: 1, cost: 3, type: 'summon', color: "#fd79a8", desc: "ボトルから妖精が射撃支援。攻撃時に追加で5ダメージを敵に与える。" },
+
+        // --- 特殊・合成アイテム ---
+        elixir: { id: 'elixir', name: "秘薬", icon: "🏺", w: 1, h: 1, cost: 6, type: 'potion', color: "#9b59b6", desc: "【合成ポーション】最大HP+40。\n決戦中にプレイヤーのHPが30%以下になると、1度だけHPを20回復する。" },
+        rotten_banana: { id: 'rotten_banana', name: "腐ったバナナ", icon: "🍌💚", w: 1, h: 1, cost: 5, type: 'food', heal: 6, color: "#2ecc71", desc: "【合成食品】最大AP+15、攻撃力+4。\nさらに敵から攻撃を受けた際、6ダメージの毒カウンターを浴びせる。" },
+        iron_shield: { id: 'iron_shield', name: "鉄の盾", icon: "🛡️✨", w: 2, h: 2, cost: 7, type: 'shield', shieldGain: 22, color: "#3498db", desc: "【合成防具】最大HP+22。\n高い防御性能を誇り、決戦中の被ダメージを常に3カットする。" },
+        poison_collar: { id: 'poison_collar', name: "毒の首輪", icon: "🦴💚", w: 2, h: 1, cost: 6, type: 'passive', color: "#2ecc71", desc: "【合成防具】\n攻撃力+8。さらに敵から攻撃を受けた際、8ダメージの猛毒カウンターを浴びせる。" },
+        super_magnet: { id: 'super_magnet', name: "超電磁マグネット", icon: "🧲⚡", w: 1, h: 1, cost: 5, type: 'passive', color: "#f1c40f", desc: "【合成パッシブ】\n歩くだけで周囲1マスの障害物を自動採掘し、さらに隣接する敵に5ダメージを与える。" },
+        garlic_pan: { id: 'garlic_pan', name: "ガーリックステーキパン", icon: "🍳🧄", w: 2, h: 1, cost: 6, type: 'weapon', damage: 8, apCost: 16, color: "#f1c40f", adjacentSynergy: true, desc: "【合成武器】\n攻撃力+8。さらに隣接する食べ物1つにつき、追加で攻撃力+3される。" },
+        cursed_piggy: { id: 'cursed_piggy', name: "呪われた貯金箱", icon: "🐷💚", w: 1, h: 2, cost: 5, type: 'passive', color: "#2ecc71", desc: "【合成パッシブ】\n準備フェーズに移行時、現在のコインの+10％追加。さらに攻撃を受けた時、周囲的全員に5ダメージの毒爆発を起こす。" },
+
+        // --- 新規合成アイテム ---
+        frost_rapier: { id: 'frost_rapier', name: "氷雪 of レイピア", icon: "🗡️❄️", w: 1, h: 2, cost: 6, type: 'weapon', damage: 9, apCost: 24, color: "#74b9ff", desc: "【合成武器】攻撃力+9。\n攻撃時、高確率で敵を「凍結」にする。凍結した敵を突く際、与えるダメージが1.5倍になる。" },
+        healing_spirit: { id: 'healing_spirit', name: "治癒 of 精霊", icon: "🧚‍♂️✨", w: 1, h: 1, cost: 6, type: 'passive', color: "#a29bfe", desc: "【合成サモン】\nお供 of 妖精。探索中3秒ごと、および決戦時の自身のターン開始時にHPを5自動回復する。" },
+
+        // --- 追加アイテム ---
+        heavy_iron_ball: { id: 'heavy_iron_ball', name: "重たい鉄球", icon: "🍒", w: 2, h: 2, cost: 5, type: 'weapon', damage: 12, apCost: 25, color: "#a4b0be", desc: "決戦中、攻撃時に相手のAPを5減少させる。" },
+        magic_herb: { id: 'magic_herb', name: "魔力のハーブ", icon: "🌿", w: 1, h: 1, cost: 3, type: 'potion', color: "#2ecc71", desc: "魔力を秘めたハーブ。最大AP+5。\nすべてのコマンドアクション of 消費APを常時5%カットする。" },
+        vampire_grail: { id: 'vampire_grail', name: "吸血鬼 of 聖杯", icon: "🍷", w: 1, h: 1, cost: 4, type: 'passive', color: "#e74c3c", desc: "不気味に輝く聖杯。\n決戦中、与えたダメージの5%を自身のHPとして吸収する。" },
+        honey: { id: 'honey', name: "ハチミツ", icon: "🍯", w: 1, h: 1, cost: 3, type: 'food', color: "#f1c40f", adjacentSynergy: true, desc: "甘くて美味しい。攻撃力+2。\n隣接する召喚アイテムの数だけ、決戦時ターン開始時にAPが+2回復。\n🐻くま装備時性能2倍。" },
+        spring_dew: { id: 'spring_dew', name: "湧き水の雫", icon: "💧", w: 1, h: 1, cost: 3, type: 'passive', color: "#3498db", adjacentSynergy: true, desc: "清らかな雫。最大AP+5。\n隣接する食べ物の数だけ決戦時のターン開始時にAPが2回復する。\n🐸かえる装備時性能2倍、AP満タン時次の攻撃ダメ+5。" },
+        fox_aburaage: { id: 'fox_aburaage', name: "秘伝の油揚げ", icon: "🦊🍘", w: 1, h: 1, cost: 3, type: 'food', color: "#e67e22", adjacentSynergy: true, desc: "キツネの大好物。基本会心率+1%。\n隣接するパッシブ1つにつき、決戦中の会心率+3%。\n🦊きつね装備時性能2倍、翌準備フェーズに3G獲得。" },
+        eternal_snow_warmer: { id: 'eternal_snow_warmer', name: "万年雪のカイロ", icon: "❄️", w: 1, h: 1, cost: 3, type: 'passive', color: "#74b9ff", adjacentSynergy: true, desc: "万年雪でも暖かい。最大HP+10。\n隣接する盾の数だけ被ダメを1カット（最低1）。\n🐧ぺんぎん装備時性能2倍、HP50%以下で最大HP15%シールド獲得。" },
+
+        clover_bookmark: { id: 'clover_bookmark', name: "クローバーのしおり", icon: "🍀", w: 1, h: 1, cost: 3, type: 'passive', color: "#2ecc71", adjacentSynergy: true, desc: "幸運のしおり。プレイヤーの会心率+2%。\n隣接する「武器」の攻撃時、さらに会心率+1%" },
+        lucky_rapier: { id: 'lucky_rapier', name: "ラッキーレイピア", icon: "🗡️🍀", w: 1, h: 2, cost: 6, type: 'weapon', damage: 8, apCost: 15, color: "#2ecc71", adjacentSynergy: true, desc: "【合成武器】攻撃力+8、会心率+1%、AP15。\nこの武器の攻撃時のみ、会心率+5%、会心ダメージ倍率が1.8倍に強化。" },
+
+        // --- 新規追加合成アイテム ---
+        inari_gold_piggy: { id: 'inari_gold_piggy', name: "稲荷の黄金貯金箱", icon: "🦊💰", w: 1, h: 2, cost: 7, type: 'passive', color: "#ffd700", adjacentSynergy: true, desc: "【合成パッシブ】準備フェーズ移行時の利息が+12%に強化される。\nさらに探索フェーズ開始時、バッグ内の「食べ物」の数×3Gを即座に獲得。\n🦊きつね装備時、毎ターンの最初のショップ更新コストが無料(0G)になる。" },
+        snow_spike_collar: { id: 'snow_spike_collar', name: "万年雪のスパイクカラー", icon: "🦴❄️", w: 2, h: 1, cost: 7, type: 'passive', color: "#74b9ff", desc: "【合成防具】被ダメージ時に6ダメージの確定カウンター。\nさらにカウンターを与えた相手の速度を一時的に低下させる。\n🐧ぺんぎん装備時、カウンターダメージが2倍(12ダメージ)に強化。" },
+        honey_roast_meat: { id: 'honey_roast_meat', name: "ハニーロースト肉", icon: "🍖", w: 2, h: 1, cost: 7, type: 'weapon', damage: 5, apCost: 15, color: "#e67e22", adjacentSynergy: true, desc: "【合成武器】攻撃ヒット時に自身のAPを3回復する。\n隣接する「召喚アイテム」の数×3、追加でAPが回復する。" },
+        fountain_of_life: { id: 'fountain_of_life', name: "生命の源泉", icon: "🏺💧", w: 1, h: 1, cost: 7, type: 'passive', color: "#3498db", desc: "【合成パッシブ】最大HP+30、最大AP+10。\n決戦中, ターン開始時にAPが満タンだった場合、最大HPの5%をシールド(追加HP)として獲得。\n🐸かえる装備時、獲得するシールド量が2倍(10%)に強化。" }
+    };
+
+    const EXCLUDED_SHOP_ITEMS = [
+        'hero_sword', 'spiked_shield', 'poison_dagger', 
+        'elixir', 'rotten_banana', 'iron_shield', 'poison_collar',
+        'super_magnet', 'garlic_pan', 'cursed_piggy',
+        'royal_key',
+        'frost_rapier', 'healing_spirit', 'lucky_rapier',
+        'inari_gold_piggy', 'snow_spike_collar', 'honey_roast_meat', 'fountain_of_life'
+    ];
+
+    const RECIPES = [
+        { base: 'sword', catalyst: 'whetstone', result: 'hero_sword' },
+        { base: 'sword', catalyst: 'poison_apple', result: 'poison_dagger' },
+        { base: 'shield', catalyst: 'collar', result: 'spiked_shield' },
+        { base: 'potion', catalyst: 'garlic', result: 'elixir' },
+        { base: 'banana', catalyst: 'poison_apple', result: 'rotten_banana' },
+        { base: 'shield', catalyst: 'whetstone', result: 'iron_shield' },
+        { base: 'collar', catalyst: 'garlic', result: 'poison_collar' },
+        { base: 'magnet', catalyst: 'whetstone', result: 'super_magnet' },
+        { base: 'pan', catalyst: 'garlic', result: 'garlic_pan' },
+        { base: 'piggy', catalyst: 'poison_apple', result: 'cursed_piggy' },
+        { base: 'sword', catalyst: 'ice_crystal', result: 'frost_rapier' },
+        { base: 'fairy_bottle', catalyst: 'potion', result: 'healing_spirit' },
+        { base: 'sword', catalyst: 'clover_bookmark', result: 'lucky_rapier' },
+        
+        // 新規レシピ
+        { base: 'piggy', catalyst: 'fox_aburaage', result: 'inari_gold_piggy' },
+        { base: 'collar', catalyst: 'eternal_snow_warmer', result: 'snow_spike_collar' },
+        { base: 'frozen_meat', catalyst: 'honey', result: 'honey_roast_meat' },
+        { base: 'spring_dew', catalyst: 'potion', result: 'fountain_of_life' }
+    ];
+
+    // --- 各種グリッド座標設計 ---
+    const GRID_SIZE = 45; 
+    const GRID_COLS = 8;
+    const GRID_ROWS = 6;
+    const GRID_START_X = 40;
+    const GRID_START_Y = 100;
+
+    const SHOP_START_X = 460;
+    const SHOP_START_Y = 120;
+
+    let state = {
+        gold: 20, 
+        wins: 0,
+        lives: 5,
+        round: 1,
+        phase: 'prep',
+        backpack: [],  
+        skills: [],
+
+        shop: [],      
+        shopLocked: false,
+        shopSlots: 5,       
+        shopPurchases: 0,   
+        gridUnlocked: {}, 
+        activeUnlockKeys: 0, 
+        rerollCost: 1,
+        skillPriceLevel: 0, // スキル購入回数に応じた価格上昇
+        skillShopUnlocked: false, duelSkillCooldowns: {}, menuOpen: false, 
+        lastMoveTime: 0,    
+        maxGatheringMoves: 20, // 探索フェーズで移動できる最大回数
+        gatheringMovesLeft: 20, // 残り移動回数
+        explorationPath: [],
+        explorationNode: 0,
+        explorationChoice: 0,
+
+        draggedItem: null,
+        dragSource: null, 
+        dragSourceIndex: -1,
+        dragOffset: { x: 0, y: 0 },
+
+        availableFusions: [], 
+
+        player: { 
+            id: "me", x:1, y:1, hp:100, maxHp:100, ap:100, maxAp:100, gold: 0,
+            atk:10, speed:10, mineAmount:1, charType:null, dir:{x:0, y:1}, permanentAtkBonus: 0,
+            permanentHpBonus: 0, cameraZoom: 1.0, torchActive: false, 
+            immunityMagma: false, halfSnowfieldDebuff: false, caveVisionLevel: 0,            
+            immunityDesertDebuff: false, normalEnvBuff: false, powerSpotCell: null,           
+            chainDestruction: false, chestLv2Chance: false, cameraZoomLevel: 0,            
+            permanentSpeedBonus: 0, permanentApBonus: 0,
+            itemAtkBonus: 0, itemHpBonus: 0, itemSpeedBonus: 0, itemApBonus: 0,
+            crit: 5,
+            springDewDamageBonus: 0,
+            springDewTriggered: false
+        },
+        boss: null, enemies: [], world: {}, spawnedChunks: {}, gameTime: 0, turn: 1, gameOver: false,
+        environment: 'normal', isGatheringPhase: false, isDuelActive: false,
+        duelTurnOwner: "player", rivalIntent: { type: "normal", name: "⚔️ 通常攻撃", desc: "" },
+        playerGuarding: false, rivalGuarding: false, rival: null,
+        elixirUsed: false,
+        penguinShieldTriggered: false,
+        
+        particles: [],
+        floatingTexts: []
+    };
+
+    // トーナメント管理用データ
+    let tournament = {
+        step: 0, // 0: 準々決勝, 1: 準決勝, 2: 決勝
+        players: [],
+        bracket: {
+            quarterfinals: [],
+            semifinals: [],
+            final: null
+        }
+    };
+
+    let enemyRealtimeTimer = null;
+    let shake = 0;
+
+    const ENV_NAMES = { normal: "Normal (ノーマル)", volcano: "Volcano (火山)", snowfield: "Snowfield (雪原)", desert: "Desert (砂漠)", cave: "Cave (洞窟)" };
+
+    let audioCtx = null;
+    function initAudio() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function playSound(type) {
+        if (!audioCtx) return;
+        try {
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+
+            if (type === 'click') {
+                osc.frequency.setValueAtTime(600, now);
+                osc.frequency.exponentialRampToValueAtTime(150, now + 0.08);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.08);
+                osc.start(now); osc.stop(now + 0.08);
+            } else if (type === 'buy') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.setValueAtTime(600, now + 0.06);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.15);
+                osc.start(now); osc.stop(now + 0.15);
+            } else if (type === 'fuse') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(440, now);
+                osc.frequency.exponentialRampToValueAtTime(1200, now + 0.3);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.3);
+                osc.start(now); osc.stop(now + 0.3);
+            } else if (type === 'hit') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(180, now);
+                osc.frequency.linearRampToValueAtTime(40, now + 0.12);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.12);
+                osc.start(now); osc.stop(now + 0.12);
+            } else if (type === 'heal') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(900, now + 0.2);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.2);
+                osc.start(now); osc.stop(now + 0.2);
+            } else if (type === 'damage') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(110, now);
+                osc.frequency.linearRampToValueAtTime(20, now + 0.25);
+                gain.gain.setValueAtTime(0.35, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.25);
+                osc.start(now); osc.stop(now + 0.25);
+            } else if (type === 'craft') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(440, now);
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.15);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.linearRampToValueAtTime(0, now + 0.15);
+                osc.start(now); osc.stop(now + 0.15);
+            }
+        } catch(e) {}
+    }
+
+    function initGrid() {
+        for (let c = 0; c < GRID_COLS; c++) {
+            for (let r = 0; r < GRID_ROWS; r++) {
+                if (c >= 2 && c <= 5 && r >= 1 && r <= 4) {
+                    state.gridUnlocked[`${c},${r}`] = true;
+                } else {
+                    state.gridUnlocked[`${c},${r}`] = false;
+                }
+            }
+        }
+    }
+
+    function getItemDimensions(item) {
+        return {
+            w: item.rotated ? item.h : item.w,
+            h: item.rotated ? item.w : item.h
+        };
+    }
+
+    function checkCollision(item, col, row, ignoreInstanceId = null) {
+        const dim = getItemDimensions(item);
+        for (let c = col; c < col + dim.w; c++) {
+            for (let r = row; r < row + dim.h; r++) {
+                if (c >= GRID_COLS || r >= GRID_ROWS) return 'out';
+                if (!state.gridUnlocked[`${c},${r}`]) return 'locked';
+                
+                const collidesWith = state.backpack.find(other => {
+                    if (other.instanceId === ignoreInstanceId) return false;
+                    const oDim = getItemDimensions(other);
+                    return (c >= other.x && c < other.x + oDim.w && r >= other.y && r < other.y + oDim.h);
+                });
+                if (collidesWith) return 'overlap';
+            }
+        }
+        return 'ok';
+    }
+
+    function areItemsAdjacent(itemA, itemB) {
+        const dimA = getItemDimensions(itemA);
+        const dimB = getItemDimensions(itemB);
+
+        const cellsA = [];
+        for (let c = itemA.x; c < itemA.x + dimA.w; c++) {
+            for (let r = itemA.y; r < itemA.y + dimA.h; r++) {
+                cellsA.push({ c, r });
+            }
+        }
+        const cellsB = [];
+        for (let c = itemB.x; c < itemB.x + dimB.w; c++) {
+            for (let r = itemB.y; r < itemB.y + dimB.h; r++) {
+                cellsB.push({ c, r });
+            }
+        }
+
+        for (let a of cellsA) {
+            for (let b of cellsB) {
+                const dc = Math.abs(a.c - b.c);
+                const rDiff = Math.abs(a.r - b.r);
+                if (dc <= 1 && rDiff <= 1) {
+                    if (!(dc === 0 && rDiff === 0)) { 
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    function applySynergies(itemList) {
+        itemList.forEach(item => {
+            item.bonusDamage = 0;
+            item.bonusShield = 0;
+            item.cooldownModifier = 1.0;
+        });
+
+        itemList.forEach(item => {
+            if (item.id === 'whetstone') {
+                itemList.forEach(other => {
+                    if (other.type === 'weapon' && areItemsAdjacent(item, other)) {
+                        const rate = (other.id === 'hero_sword') ? 3 : 2; 
+                        other.bonusDamage += rate;
+                    }
+                });
+            }
+
+            if (item.id === 'garlic') {
+                itemList.forEach(other => {
+                    if (other.type === 'shield' && areItemsAdjacent(item, other)) {
+                        other.bonusShield += 4;
+                    }
+                });
+            }
+
+            if (item.id === 'pan' || item.id === 'garlic_pan') {
+                let foodCount = 0;
+                itemList.forEach(other => {
+                    if (other.type === 'food' && areItemsAdjacent(item, other)) {
+                        foodCount++;
+                    }
+                });
+                const rate = (item.id === 'garlic_pan') ? 3 : 2; 
+                item.bonusDamage += foodCount * rate;
+            }
+        });
+    }
+
+    function scanFusions() {
+        state.availableFusions = [];
+        if (state.phase !== 'prep') return;
+
+        for (let i = 0; i < state.backpack.length; i++) {
+            for (let j = i + 1; j < state.backpack.length; j++) {
+                const itemA = state.backpack[i];
+                const itemB = state.backpack[j];
+
+                if (areItemsAdjacent(itemA, itemB)) {
+                    const recipe = RECIPES.find(r => 
+                        (r.base === itemA.id && r.catalyst === itemB.id) ||
+                        (r.base === itemB.id && r.catalyst === itemA.id)
+                    );
+                    if (recipe) {
+                        state.availableFusions.push({ itemA, itemB, recipe });
+                    }
+                }
+            }
+        }
+    }
+
+    function executeFusion(fusion) {
+        playSound('fuse');
+        const { itemA, itemB, recipe } = fusion;
+        
+        const template = ITEM_TEMPLATES[recipe.result];
+        const newItem = {
+            ...template,
+            instanceId: Date.now() + Math.random().toString(),
+            x: itemA.x,
+            y: itemA.y,
+            rotated: false
+        };
+
+        state.backpack = state.backpack.filter(item => 
+            item.instanceId !== itemA.instanceId && 
+            item.instanceId !== itemB.instanceId
+        );
+
+        const check = checkCollision(newItem, itemA.x, itemA.y);
+        if (check === 'ok') {
+            state.backpack.push(newItem);
+        } else {
+            // 置き場所がない場合はカーソルで持った状態にして、空いている場所へ配置できるようにする
+            state.draggedItem = newItem;
+            state.dragSource = 'backpack';
+        }
+
+        scanFusions();
+        updateUI();
+    }
+
+    // --- スキルショップ ---
+    function getRandomShopSkill() {
+        const key = SKILL_KEYS[Math.floor(Math.random() * SKILL_KEYS.length)];
+        return SKILL_TEMPLATES[key];
+    }
+
+    function buySkill(shopIndex) {
+        if (state.phase !== 'shop') return;
+        if (!state.skillShopUnlocked) { addLog('🔒 スキルショップ未解禁！探索で「✨ スキル解禁所」に止まってください。'); playSound('damage'); return; }
+
+        const slot = state.shop[shopIndex];
+        if (!slot || slot.bought) return;
+
+        const skill = slot.skillTemplate;
+        if (!skill) return;
+
+        // スキルは購入するたびに少しずつ高くなる
+        const actualCost = Math.max(1, Math.ceil(skill.cost * (1 + (state.skillPriceLevel || 0) * 0.10)));
+
+        if (state.gold < actualCost) {
+            addLog("🪙 ゴールドが不足しています！");
+            addFloatingText(SHOP_START_X + (shopIndex % 5) * 85 + 35,
+                            SHOP_START_Y + Math.floor(shopIndex / 5) * 85 + 35,
+                            "ゴールド不足！", "#e74c3c");
+            playSound('damage');
+            return;
+        }
+
+        state.gold -= actualCost;
+        state.skillPriceLevel = (state.skillPriceLevel || 0) + 1;
+        state.skills.push({
+            ...skill,
+            cost: actualCost,
+            instanceId: Date.now() + Math.random().toString()
+        });
+        slot.bought = true;
+
+        calculatePlayerStatsFromBackpack();
+        recordShopPurchase();
+        addLog(`${skill.icon} 【${skill.name}】を習得！ ${skill.desc}`);
+        addFloatingText(
+            SHOP_START_X + (shopIndex % 5) * 85 + 35,
+            SHOP_START_Y + Math.floor(shopIndex / 5) * 85 + 35,
+            `習得！ ${skill.icon}`, "#2ecc71"
+        );
+        playSound('buy');
+        updateUI();
+    }
+
+    function getRandomShopItem() {
+        return getRandomShopSkill();
+    }
+
+    function refillShop() {
+        state.shop = [];
+        for (let i = 0; i < state.shopSlots; i++) {
+            state.shop.push({
+                skillTemplate: getRandomShopSkill(),
+                itemTemplate: null,
+                locked: false,
+                bought: false
+            });
+        }
+    }
+
+    // 0Gコスト時に+1リロール上昇させないようにする
+    function rerollShop() {
+        initAudio();
+        if (state.phase !== 'shop') return;
+        if (state.gold < state.rerollCost) {
+            addLog("🪙 ゴールドが不足しています！");
+            playSound('damage');
+            return;
+        }
+        
+        state.gold -= state.rerollCost;
+        if (state.rerollCost === 0) { state.rerollCost = 1; } else { state.rerollCost += 1; }
+        state.skillPriceLevel = (state.skillPriceLevel || 0) + 1;
+        playSound('click');
+
+        for (let i = 0; i < state.shopSlots; i++) {
+            if (!state.shop[i] || !state.shop[i].locked) {
+                state.shop[i] = {
+                    skillTemplate: getRandomShopSkill(),
+                    itemTemplate: null,
+                    locked: false,
+                    bought: false
+                };
+            }
+        }
+        updateUI();
+    }
+
+    function triggerLockedCellUnlock(col, row) {
+        if (state.activeUnlockKeys > 0 && !state.gridUnlocked[`${col},${row}`]) {
+            state.gridUnlocked[`${col},${row}`] = true;
+            state.activeUnlockKeys--;
+            playSound('buy');
+            updateUI();
+        }
+    }
+
+    function recordShopPurchase() {
+        state.shopPurchases = (state.shopPurchases || 0) + 1;
+        let extraSlots = Math.floor(state.shopPurchases / 6);
+        let newSlots = Math.min(10, 5 + extraSlots);
+        if (newSlots > state.shopSlots) {
+            state.shopSlots = newSlots;
+            addLog(`🎉 スキルを累計 ${state.shopPurchases} 回習得！ショップ枠が ${state.shopSlots} 枠に広がりました！`);
+            while (state.shop.length < state.shopSlots) {
+                state.shop.push({
+                    skillTemplate: getRandomShopSkill(),
+                    itemTemplate: null,
+                    locked: false,
+                    bought: false
+                });
+            }
+        }
+        updateUI();
+    }
+
+    function calculatePlayerStatsFromBackpack() {
+        let template = CHAR_TEMPLATES[state.player.charType];
+        if (!template) return;
+
+        let addedAtk = state.player.permanentAtkBonus || 0;
+        let addedHp = state.player.permanentHpBonus || 0;
+        let addedSpeed = state.player.permanentSpeedBonus || 0;
+        let addedAp = state.player.permanentApBonus || 0;
+        let addedCrit = 5;
+
+        // スキルショップで習得したスキルのステータス上昇
+        (state.skills || []).forEach(skill => {
+            addedHp += skill.hp || 0;
+            addedAtk += skill.atk || 0;
+            addedSpeed += skill.speed || 0;
+            addedAp += skill.ap || 0;
+            addedCrit += skill.crit || 0;
+        });
+
+        applySynergies(state.backpack);
+
+        let isBear = state.player.charType === 'bear';
+        let isFrog = state.player.charType === 'frog';
+        let isFox = state.player.charType === 'fox';
+        let isPenguin = state.player.charType === 'penguin';
+
+        state.backpack.forEach(item => {
+            let itemDmg = item.damage || 0;
+            let itemBonusDmg = item.bonusDamage || 0;
+            if (itemDmg > 0) {
+                addedAtk += (itemDmg + itemBonusDmg);
+            }
+
+            let itemShield = item.shieldGain || 0;
+            let itemBonusShield = item.bonusShield || 0;
+            if (itemShield > 0) {
+                addedHp += (itemShield + itemBonusShield);
+            }
+
+            if (item.id === 'banana') { addedHp += 10; addedAp += 5; } 
+            if (item.id === 'rotten_banana') { addedAp += 15; addedAtk += 4; }
+            if (item.id === 'potion') { addedHp += 15; } 
+            if (item.id === 'elixir') addedHp += 40;
+            if (item.id === 'poison_collar') addedAtk += 8;
+            if (item.id === 'poison_apple') addedAp += 10;
+            if (item.id === 'ice_crystal') addedSpeed += 2;
+
+            if (item.id === 'heavy_iron_ball') {
+                addedAtk += 12;
+            }
+            if (item.id === 'magic_herb') {
+                addedAp += 5;
+            }
+            if (item.id === 'honey') {
+                let mult = isBear ? 2 : 1;
+                addedAtk += 2 * mult;
+            }
+            if (item.id === 'spring_dew') {
+                let mult = isFrog ? 2 : 1;
+                addedAp += 5 * mult;
+            }
+            if (item.id === 'fox_aburaage') {
+                let mult = isFox ? 2 : 1;
+                addedCrit += 1 * mult;
+
+                let adjacentAccessories = state.backpack.filter(other => 
+                    (other.type === 'passive' || other.type === 'utility') && areItemsAdjacent(item, other)
+                ).length;
+                addedCrit += (3 * mult) * adjacentAccessories;
+            }
+            if (item.id === 'eternal_snow_warmer') {
+                let mult = isPenguin ? 2 : 1;
+                addedHp += 10 * mult;
+            }
+            if (item.id === 'clover_bookmark') {
+                addedCrit += 2;
+            }
+            if (item.id === 'lucky_rapier') {
+                addedCrit += 1;
+            }
+            
+            // 新規追加アイテムステータス加算
+            if (item.id === 'fountain_of_life') {
+                addedHp += 30;
+                addedAp += 10;
+            }
+            if (item.id === 'honey_roast_meat') {
+                // 基本の攻撃力増加
+                addedAtk += 5;
+            }
+        });
+
+        let baseHp = template.hp + addedHp;
+        let baseAtk = template.atk + addedAtk;
+        let baseSpeed = template.speed + addedSpeed;
+        let baseAp = template.ap + addedAp;
+
+        if (addedHp > 0)    baseHp += (template.growHp || 0);
+        if (addedAtk > 0)   baseAtk += (template.growAtk || 0);
+        if (addedSpeed > 0) baseSpeed += (template.growSpeed || 0);
+        if (addedAp > 0)    baseAp += (template.growAp || 0);
+
+        state.player.maxHp = baseHp;
+        state.player.atk = baseAtk;
+        state.player.speed = baseSpeed;
+        state.player.maxAp = baseAp;
+        state.player.crit = addedCrit; 
+
+        if (state.phase === 'prep') {
+            state.player.hp = state.player.maxHp;
+            state.player.ap = state.player.maxAp;
+        } else {
+            state.player.hp = Math.min(state.player.maxHp, state.player.hp);
+            state.player.ap = Math.min(state.player.maxAp, state.player.ap);
+        }
+    }
+
+    function addLog(text) {
+        const logBox = document.getElementById('game-log');
+        if (!logBox) return;
+        const p = document.createElement('p');
+        p.style.margin = '4px 0';
+        p.style.lineHeight = '1.3';
+        p.innerText = text;
+        logBox.appendChild(p);
+        logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function getCell(x, y) {
+        if (state.isDuelActive) {
+            if (x < 0 || x >= 10 || y < 0 || y >= 10) return 2; 
+        }
+        const key = `${x},${y}`;
+        return state.world[key] !== undefined ? state.world[key] : 0;
+    }
+
+    function setCell(x, y, val) {
+        const key = `${x},${y}`;
+        if (val === 0) {
+            delete state.world[key];
+        } else {
+            state.world[key] = val;
+        }
+    }
+
+    // --- 桃鉄風・無限一本道＋ランダム分岐の探索マップ ---
+    // ゴールや最終地点は存在せず、プレイヤーが進むたびに先の道を追加生成する。
+    const EXPLORATION_NODE_TEMPLATES = [
+        { type:'gold',  icons:['💰','🪙','💎'], names:['小さな財宝','金貨の山','光る鉱石','落ちている袋'],
+          reward:()=>({gold:10 + Math.floor(Math.random()*41)}) },
+        { type:'normal', icons:['🌿','🌳','🌾','🍀'], names:['草原の道','森の小道','静かな平原','緑の獣道'],
+          reward:()=>({gold:5 + Math.floor(Math.random()*21)}) },
+        { type:'item', icons:['💎','🔮','🪨'], names:['レア素材','希少鉱石','不思議な鉱石','輝く原石'],
+          reward:()=>({gold:15 + Math.floor(Math.random()*36), item:true}) },
+        { type:'event', icons:['❓','✨','🗿','📜'], names:['謎の祠','旅人の依頼','不思議な泉','古代遺跡','謎の石碑'],
+          reward:()=>({gold:20 + Math.floor(Math.random()*81), hp:Math.random()<0.35 ? (Math.random()<0.5 ? 10 : -10) : 0}) },
+        { type:'risk', icons:['🔥','🌋','⚠️','💀'], names:['危険な近道','険しい山道','灼熱の谷','危険地帯'],
+          reward:()=>({gold:50 + Math.floor(Math.random()*101), hp:-(5 + Math.floor(Math.random()*21))}) },
+        { type:'chest', icons:['🎁','📦','🧰'], names:['宝箱','古びた箱','旅人の荷箱'],
+          reward:()=>({gold:40 + Math.floor(Math.random()*91), item:Math.random()<0.5}) },
+        { type:'safe', icons:['🏕️','⛺','🌴'], names:['休憩所','安全なキャンプ','旅人の野営地'],
+          reward:()=>({hp:10 + Math.floor(Math.random()*31), gold:Math.random()<0.3 ? 10 + Math.floor(Math.random()*21) : 0}) },
+        { type:'skill_unlock', icons:['✨','🔓','📘'], names:['スキル解禁所','スキル研究所','秘術の祭壇'], reward:()=>({skillUnlock:true}) },
+        { type:'gold_x2', icons:['×2','💰×2'], names:['ゴールド×2マス','倍増コイン','黄金倍化マス'], reward:()=>({goldMultiplier:2}) },
+        { type:'gold_x3', icons:['×3','💰×3'], names:['ゴールド×3マス','大黄金倍化','トリプルコイン'], reward:()=>({goldMultiplier:3}) },
+        { type:'gold_div2', icons:['÷2','💰÷2'], names:['ゴールド÷2マス','半減の罠','コイン半減マス'], reward:()=>({goldDivider:2}) },
+        { type:'gold_loss', icons:['💸','⚠️','🕳️'], names:['ゴールド没収マス','落とし穴（お金）','盗賊の罠','散財イベント'], reward:()=>({goldLoss:20 + Math.floor(Math.random()*61)}) },
+        { type:'gold_loss_percent', icons:['💥','💸','😈'], names:['ゴールド30%消失','強制徴収マス','盗賊団の襲撃'], reward:()=>({goldLossPercent:0.30}) }
+    ];
+
+    function randomFrom(arr) {
+        return arr[Math.floor(Math.random() * arr.length)];
+    }
+
+    function randomExplorationReward(template) {
+        const reward = template.reward ? template.reward() : null;
+        if (reward && reward.hp === 0) delete reward.hp;
+        if (reward && reward.gold === 0) delete reward.gold;
+        return reward;
+    }
+
+    // 指定した数だけ「まだ先の道」を追加生成する。
+    // 既にある道は一切作り直さないので、進むたびに世界が先へ伸びていく。
+    function appendExplorationNodes(count) {
+        const path = state.explorationPath || [];
+
+        for (let k = 0; k < count; k++) {
+            const index = path.length;
+            const template = randomFrom(EXPLORATION_NODE_TEMPLATES);
+
+            const node = {
+                index,
+                type: template.type,
+                icon: randomFrom(template.icons),
+                name: randomFrom(template.names),
+                reward: randomExplorationReward(template),
+                next: [],
+                visited: false
+            };
+
+            // 最初の道以外は、直前のマスから必ずつなぐ。
+            if (index > 0 && path[index - 1].next.length === 0) {
+                path[index - 1].next = [index];
+            }
+
+            path.push(node);
+        }
+
+        // 道の先に余裕を持たせるため、各ノードをランダムに分岐させる。
+        // 分岐先は「次のマス」と「その次のマス」。どちらを選んでも必ず先へ進める。
+        // 分岐頻度を引き上げ、探索のたびに選択肢が生まれやすくした。
+        const branchCandidates = [];
+        const current = state.explorationNode || 0;
+
+        for (let i = Math.max(1, current + 1); i < path.length - 2; i++) {
+            if (path[i].next.length === 1 && Math.random() < 0.4) {
+                branchCandidates.push(i);
+            }
+        }
+
+        branchCandidates.forEach(i => {
+            path[i].next = [i + 1, i + 2];
+            if (Math.random() < 0.5) path[i].next.reverse();
+        });
+
+        state.explorationPath = path;
+    }
+
+    function buildExplorationPath() {
+        state.explorationPath = [];
+        state.explorationNode = 0;
+        state.explorationChoice = 0;
+        state.world = {};
+
+        // スタート＋十分な先行生成。
+        state.explorationPath.push({
+            index:0,
+            type:'start',
+            icon:'🚩',
+            name:'スタート',
+            reward:null,
+            next:[],
+            visited:false
+        });
+
+        appendExplorationNodes(12);
+        if (!state.explorationPath.some(n => n.type === 'gold_loss' || n.type === 'gold_loss_percent')) {
+            const lossNode = state.explorationPath[Math.min(7, state.explorationPath.length - 1)];
+            if (lossNode) { lossNode.type='gold_loss'; lossNode.icon='💸'; lossNode.name='ゴールド没収マス'; lossNode.reward={goldLoss:30 + Math.floor(Math.random()*51)}; }
+        }
+
+        if (!state.explorationPath.some(n => n.type === 'skill_unlock')) { const u=state.explorationPath[Math.min(4,state.explorationPath.length-1)]; if(u&&u.type!=='start'){u.type='skill_unlock';u.icon='✨';u.name='スキル解禁所';u.reward={skillUnlock:true};} }
+
+        // スタート地点は必ず2方向に分岐させる（1回の探索でも選択の楽しさを残すため）。
+        state.explorationPath[0].next = [1, 2];
+
+        addLog('🗺️ 探索ルートを生成しました。↑/↓でルートを選び、→で進みましょう！');
+    }
+
+    // 現在位置から先の道が少なくなったら、新しい道を追加する。
+    function ensureExplorationPathAhead() {
+        const path = state.explorationPath || [];
+        const current = state.explorationNode || 0;
+
+        if (path.length - current < 8) {
+            appendExplorationNodes(10);
+        }
+    }
+
+    function currentExplorationNode() { return state.explorationPath[state.explorationNode]; }
+
+    function collectExplorationReward(node) {
+        if (!node || node.visited || !node.reward) return;
+        node.visited = true;
+        const r = node.reward;
+        if (r.gold) {
+            state.gold += r.gold;
+            addFloatingText(460, 80, `+${r.gold}G`, '#f1c40f');
+            addLog(`🪙 ${node.name}：${r.gold}G 獲得！`);
+        }
+        if (r.hp) {
+            const old = state.player.hp;
+            state.player.hp = Math.max(1, Math.min(state.player.maxHp, state.player.hp + r.hp));
+            const diff = state.player.hp - old;
+            addLog(`${r.hp > 0 ? '❤️' : '🔥'} ${node.name}：HP ${diff >= 0 ? '+' : ''}${diff}`);
+        }
+        if (r.item) { state.gold += 25; addLog('💎 レア素材を発見！ 換金ボーナス +25G'); }
+        if (r.skillUnlock && !state.skillShopUnlocked) { state.skillShopUnlocked=true; addLog('✨ 【スキル解禁】ショップでスキルを購入できるようになりました！'); addFloatingText(460,120,'✨ スキル解禁！','#d8b4fe'); }
+        if (r.goldMultiplier) { const b=state.gold; state.gold=Math.max(0,Math.floor(state.gold*r.goldMultiplier)); addLog(`💰 【${node.name}】所持ゴールド ×${r.goldMultiplier}！ ${b}G → ${state.gold}G`); addFloatingText(460,120,`×${r.goldMultiplier} GOLD`,'#f1c40f'); }
+        if (r.goldDivider) { const b=state.gold; state.gold=Math.floor(state.gold/r.goldDivider); addLog(`⚠️ 【${node.name}】所持ゴールド ÷${r.goldDivider}！ ${b}G → ${state.gold}G`); addFloatingText(460,120,`÷${r.goldDivider} GOLD`,'#e74c3c'); }
+        if (r.goldLoss) { const b=state.gold; const loss=Math.min(state.gold, r.goldLoss); state.gold-=loss; addLog(`💸 【${node.name}】${loss}Gを失った！ ${b}G → ${state.gold}G`); addFloatingText(460,120,`-${loss}G`,'#e74c3c'); }
+        if (r.goldLossPercent) { const b=state.gold; const loss=Math.floor(state.gold*r.goldLossPercent); state.gold-=loss; addLog(`💥 【${node.name}】ゴールド${Math.round(r.goldLossPercent*100)}%消失！ ${b}G → ${state.gold}G`); addFloatingText(460,120,`-${loss}G`,'#e74c3c'); }
+        playSound('buy');
+    }
+
+    function moveExploration(step) {
+        if (state.phase !== 'gathering' || state.gatheringMovesLeft <= 0) return;
+
+        ensureExplorationPathAhead();
+
+        const node = currentExplorationNode();
+        if (!node || node.next.length === 0) {
+            // 無限探索なので、本来ここには来ない。念のため先を生成する。
+            appendExplorationNodes(10);
+            if (node && node.next.length === 0) node.next = [node.index + 1];
+        }
+
+        if (node.next.length > 1 && step === 0) {
+            addLog('↕️ 分岐です。↑/↓でルートを選び、→で進みます。');
+            return;
+        }
+
+        let choice = state.explorationChoice;
+        if (node.next.length === 1) choice = 0;
+
+        const target = node.next[Math.max(0, Math.min(choice, node.next.length - 1))];
+
+        // 万一、まだ生成されていない番号を参照していたら先に追加。
+        while (state.explorationPath.length <= target) {
+            appendExplorationNodes(5);
+        }
+
+        state.explorationNode = target;
+        state.gatheringMovesLeft--;
+        state.explorationChoice = 0;
+
+        const arrived = currentExplorationNode();
+        collectExplorationReward(arrived);
+
+        // ゴール・最終地点は存在しない。
+        // 移動回数が残っている限り、そのまま探索を続ける。
+        ensureExplorationPathAhead();
+
+        if (state.gatheringMovesLeft <= 0) {
+            addLog('👣 移動回数を使い切りました！ 探索を切り上げます。');
+            setTimeout(() => {
+                if (state.phase === 'gathering') endPlayerTurnHand();
+            }, 300);
+        }
+
+        updateUI();
+    }
+
+    function generateWorld() {
+        state.world = {};
+        state.spawnedChunks = {};
+        for (let x = -35; x <= 35; x++) {
+            for (let y = -35; y <= 35; y++) {
+                if (x === 1 && y === 1) continue; 
+                if (Math.random() < 0.12) {
+                    let cellType = 1; 
+                    if (state.environment === 'volcano') {
+                        cellType = Math.random() < 0.4 ? 13 : 2; 
+                    } else if (state.environment === 'snowfield') {
+                        cellType = 2; 
+                    } else if (state.environment === 'desert') {
+                        cellType = 6; 
+                    } else if (state.environment === 'cave') {
+                        cellType = 2; 
+                    } else {
+                        cellType = Math.random() < 0.6 ? 1 : 2; 
+                    }
+                    setCell(x, y, cellType);
+                }
+            }
+        }
+    }
+
+    // 探索フェーズでは敵を使用しません。決戦のNPCは state.rival / tournament 側で管理します。
+    function refillEnemiesAroundPlayer() { state.enemies = []; }
+    function checkAndSpawnChunkEnemies() { state.enemies = []; }
+    function triggerEnemiesTurn() { /* 探索中の敵ターンは廃止 */ }
+
+    function cycleEnvironment() {
+        const environments = ['normal', 'volcano', 'snowfield', 'desert', 'cave'];
+        const randomIndex = Math.floor(Math.random() * environments.length);
+        state.environment = environments[randomIndex];
+
+        addLog(`📢 周囲の環境が急変しました！ [環境: ${ENV_NAMES[state.environment]}]`);
+        playSound('craft');
+        updateUI();
+    }
+
+    // --- 準備フェーズ開始 ---
+    function startPreparationPhase() {
+        state.phase = 'prep';
+        state.isGatheringPhase = false;
+        state.isDuelActive = false;
+        state.selectedItem = null;
+
+        document.getElementById('duel-controls-overlay').style.display = 'none';
+        document.getElementById('matching-overlay').style.display = 'none';
+        document.getElementById('tournament-overlay').style.display = 'none';
+        document.getElementById('end-turn-btn').style.display = 'none';
+        const moveStat = document.getElementById('gathering-moves-stat');
+        if (moveStat) moveStat.style.display = 'none';
+
+        // 稲荷の黄金貯金箱と既存貯金箱の利息処理
+        let piggyCount = state.backpack.filter(item => item.id === 'piggy').length;
+        if (piggyCount > 0) {
+            let bonus = Math.floor(state.gold * 0.05 * piggyCount);
+            if (bonus > 0) {
+                state.gold += bonus;
+                addLog(`🐷 ブタの貯金箱の利息！ 🪙 +${bonus}G 獲得！`);
+            }
+        }
+        let cursedCount = state.backpack.filter(item => item.id === 'cursed_piggy').length;
+        if (cursedCount > 0) {
+            let bonus = Math.floor(state.gold * 0.10 * cursedCount);
+            if (bonus > 0) {
+                state.gold += bonus;
+                addLog(`🐷💚 呪われた貯金箱の呪われた利息！ 🪙 +${bonus}G 獲得！`);
+            }
+        }
+        let inariCount = state.backpack.filter(item => item.id === 'inari_gold_piggy').length;
+        if (inariCount > 0) {
+            let bonus = Math.floor(state.gold * 0.12 * inariCount);
+            if (bonus > 0) {
+                state.gold += bonus;
+                addLog(`🦊💰 稲荷の黄金貯金箱の黄金の利息！ 🪙 +${bonus}G 獲得！`);
+            }
+        }
+
+        let isFox = state.player.charType === 'fox';
+        let aburaageCount = state.backpack.filter(item => item.id === 'fox_aburaage').length;
+        if (isFox && aburaageCount > 0) {
+            let bonusGold = aburaageCount * 3;
+            state.gold += bonusGold;
+            addLog(`🦊🍘 秘伝 of 油揚げの専用効果により 🪙 +${bonusGold}G のボーナスを獲得！`);
+        }
+
+        // きつね固有シナジー：稲荷の黄金貯金箱所持時に最初のショップ更新が無料
+        let hasInari = state.backpack.some(item => item.id === 'inari_gold_piggy');
+        if (isFox && hasInari) {
+            state.rerollCost = 0; 
+        } else {
+            state.rerollCost = 1;
+        }
+
+        scanFusions();
+        updatePrepUI();
+        addLog(`🛡️ 【第 ${state.round} ラウンド：準備フェーズ】 バックパック内のアイテムを整え、戦力を高めましょう！`);
+        playSound('craft');
+        updateUI();
+    }
+
+    function updatePrepUI() {
+        document.getElementById('gold-count').innerText = state.gold;
+    }
+
+    function selectItem(item, source) {
+        state.selectedItem = item ? { ...item, source: source } : null;
+        updatePrepUI();
+    }
+
+    function rotateSelectedItem() {
+        if (!state.selectedItem) return;
+        let item = state.selectedItem;
+        
+        let temp = item.w;
+        item.w = item.h;
+        item.rotated = !item.rotated;
+        
+        if (item.source === 'backpack') {
+            state.backpack = state.backpack.filter(bi => bi.instanceId !== item.instanceId);
+            item.source = 'stash';
+        } else if (item.source === 'stash') {
+            let stashIdx = state.stashItems.findIndex(si => si.instanceId === item.instanceId);
+            if (stashIdx !== -1) {
+                state.stashItems[stashIdx] = { ...item };
+            }
+        }
+        
+        updatePrepUI();
+        playSound('mine');
+    }
+
+
+    function handleCellClick(cx, cy) {
+        let gridMap = Array(5).fill(null).map(() => Array(5).fill(null));
+        state.backpack.forEach(item => {
+            for (let dx = 0; dx < item.w; dx++) {
+                for (let dy = 0; dy < item.h; dy++) {
+                    let tx = item.x + dx;
+                    let ty = item.y + dy;
+                    if (tx >= 0 && tx < 5 && ty >= 0 && ty < 5) {
+                        gridMap[ty][tx] = item;
+                    }
+                }
+            }
+        });
+        
+        let clickedItem = gridMap[cy][cx];
+        
+        if (state.selectedItem) {
+            let held = state.selectedItem;
+            
+            if (cx + held.w > 5 || cy + held.h > 5) {
+                addLog("⚠️ バックパックからはみ出ています！");
+                playSound('damage');
+                return;
+            }
+            
+            let collision = false;
+            for (let dx = 0; dx < held.w; dx++) {
+                for (let dy = 0; dy < held.h; dy++) {
+                    let cellItem = gridMap[cy + dy][cx + dx];
+                    if (cellItem && cellItem.instanceId !== held.instanceId) {
+                        collision = true;
+                    }
+                }
+            }
+            
+            if (collision) {
+                addLog("⚠️ 他のアイテムと重複しています！");
+                playSound('damage');
+                return;
+            }
+            
+            state.stashItems = state.stashItems.filter(si => si.instanceId !== held.instanceId);
+            state.backpack = state.backpack.filter(bi => bi.instanceId !== held.instanceId);
+            
+            state.backpack.push({
+                ...held,
+                x: cx,
+                y: cy
+            });
+            
+            state.selectedItem = null;
+            updatePrepUI();
+            playSound('craft');
+            
+        } else {
+            if (clickedItem) {
+                selectItem(clickedItem, 'backpack');
+                state.backpack = state.backpack.filter(bi => bi.instanceId !== clickedItem.instanceId);
+                updatePrepUI();
+                playSound('mine');
+            }
+        }
+    }
+
+    function finishPreparation() {
+        if (state.selectedItem) {
+            addLog("⚠️ アイテムを手に持った状態でのフェーズ移行はできません。");
+            playSound('damage');
+            return;
+        }
+        calculatePlayerStatsFromBackpack();
+        startGatheringPhase();
+    }
+
+    // 探索終了後に独立したショップフェーズへ移行
+    function startShopPhase() {
+        state.phase = 'shop';
+        state.isGatheringPhase = false;
+        state.isDuelActive = false;
+        state.selectedItem = null;
+        document.getElementById('end-turn-btn').style.display = 'none';
+        const moveStat = document.getElementById('gathering-moves-stat');
+        if (moveStat) moveStat.style.display = 'none';
+        refillShop();
+        addLog(`🛒 【第 ${state.round} ラウンド：ショップフェーズ】 ゴールドを使ってスキルを購入しましょう！`);
+        playSound('buy');
+        updateUI();
+    }
+
+    function handleActionButton() {
+        initAudio();
+        if (state.phase === 'prep') {
+            finishPreparation();
+        } else if (state.phase === 'shop') {
+            calculatePlayerStatsFromBackpack();
+            startDuelPhase();
+        } else if (state.phase === 'gathering') {
+            endPlayerTurnHand();
+        }
+    }
+
+    /* 探索・採掘フェーズ */
+    function startGatheringPhase() {
+        state.phase = 'gathering';
+        state.isGatheringPhase = true; 
+        state.isDuelActive = false;
+        state.player.x = 0;
+        state.player.y = 0;
+        state.gatheringMovesLeft = state.maxGatheringMoves;
+        state.enemies = [];
+        buildExplorationPath();
+
+        document.getElementById('end-turn-btn').style.display = 'block';
+        const moveStat = document.getElementById('gathering-moves-stat');
+        if (moveStat) moveStat.style.display = 'flex';
+
+        cycleEnvironment(); 
+        generateWorld();
+
+        // 稲荷の黄金貯金箱の効果：探索開始時に食べ物の数×3G獲得
+        let inariPiggyCount = state.backpack.filter(item => item.id === 'inari_gold_piggy').length;
+        if (inariPiggyCount > 0) {
+            let foodCount = state.backpack.filter(item => item.type === 'food').length;
+            let bonusGold = foodCount * 3 * inariPiggyCount;
+            if (bonusGold > 0) {
+                state.gold += bonusGold;
+                addLog(`🦊💰 稲荷の黄金貯金箱の効果！バッグ内の食べ物 ${foodCount} 個により 🪙 +${bonusGold}G を即座に獲得！`);
+            }
+        }
+
+        addLog(`🗺️ 【第 ${state.round} ラウンド：探索フェーズ】 残り ${state.gatheringMovesLeft} 回移動できます。道を進み続けましょう！`);
+        playSound('craft');
+
+        updateUI();
+        if (enemyRealtimeTimer) { clearInterval(enemyRealtimeTimer); enemyRealtimeTimer = null; }
+
+        updatePlayerStats(); 
+        updateUI();
+    }
+
+    // 修正後 (新しいコード - 探索終了後は常に準備フェーズへ)
+    function endPlayerTurnHand() {
+        if (state.isGatheringPhase) {
+            addLog("⏩ 探索を終了し、ショップフェーズへ進みます。");
+        
+            if (enemyRealtimeTimer) {
+                clearInterval(enemyRealtimeTimer);
+                enemyRealtimeTimer = null;
+            }
+
+            // 探索終了時はショップへ移行する
+            state.round++; // ラウンド数を進める
+            calculatePlayerStatsFromBackpack();
+            startShopPhase();
+
+            updateUI();
+        }
+    }
+
+    /* 決戦（タイマン）フェーズ：擬似オンライン・トーナメント形式 */
+    function startDuelPhase() {
+        state.phase = 'duel';
+        state.isGatheringPhase = false;
+        document.getElementById('end-turn-btn').style.display = 'none';
+        
+        // initTournament() は selectChar で最初に一度だけ行われるためここでは呼ばない
+        showTournamentScreen();
+    }
+
+    function initTournament() {
+        const ONLINE_NAMES = ["ひろき⚡️", "たかし🛡️", "Sakura🌸", "Alex🇺🇸", "Bob🍔", "Ken🇯🇵", "Chao🇨🇳", "Sophia🇫🇷", "Elena🇪🇸", "Yuki🦊", "Gamer999", "BackpackGod"];
+        
+        // 7名の対戦NPC名をランダム選出
+        let selectedNames = [...ONLINE_NAMES].sort(() => Math.random() - 0.5).slice(0, 7);
+        let chars = ['bear', 'frog', 'fox', 'penguin', 'dog'];
+        
+        // プレイヤー自身
+        let playerCharTemplate = CHAR_TEMPLATES[state.player.charType];
+        let myData = {
+            id: 0,
+            isPlayer: true,
+            name: `あなた (${playerCharTemplate.icon})`,
+            charType: state.player.charType,
+            icon: playerCharTemplate.icon,
+            hp: state.player.maxHp,
+            maxHp: state.player.maxHp,
+            atk: state.player.atk,
+            speed: state.player.speed,
+            active: true
+        };
+        
+        let tPlayers = [myData];
+        
+        // NPC 7名のデータ構築
+        for (let i = 0; i < 7; i++) {
+            let name = selectedNames[i];
+            let cType = chars[Math.floor(Math.random() * chars.length)];
+            let template = CHAR_TEMPLATES[cType];
+            
+            // プレイヤーの初期値に基づいた擬似同期スケーリング
+            // トーナメント難易度：最初はかなり弱く、勝ち上がるほど強くする
+            const difficulty = 0.68 + i * 0.06;
+            let hpScale = difficulty * (0.90 + Math.random() * 0.16);
+            let atkScale = difficulty * (0.82 + Math.random() * 0.16);
+            let speedScale = difficulty * (0.82 + Math.random() * 0.16);
+            
+            tPlayers.push({
+                id: i + 1,
+                isPlayer: false,
+                name: name,
+                charType: cType,
+                icon: template.icon,
+                hp: Math.round(state.player.maxHp * hpScale),
+                maxHp: Math.round(state.player.maxHp * hpScale),
+                atk: Math.round(state.player.atk * atkScale),
+                speed: Math.round(state.player.speed * speedScale),
+                active: true
+            });
+        }
+        
+        tournament = {
+            step: 0, // 0: 準々決勝, 1: 準決勝, 2: 決勝
+            players: tPlayers,
+            bracket: {
+                quarterfinals: [
+                    { p1: tPlayers[0], p2: tPlayers[1], winner: null }, // あなた vs NPC1
+                    { p1: tPlayers[2], p2: tPlayers[3], winner: null },
+                    { p1: tPlayers[4], p2: tPlayers[5], winner: null },
+                    { p1: tPlayers[6], p2: tPlayers[7], winner: null }
+                ],
+                semifinals: [
+                    { p1: null, p2: null, winner: null },
+                    { p1: null, p2: null, winner: null }
+                ],
+                final: { p1: null, p2: null, winner: null }
+            }
+        };
+    }
+
+    function showTournamentScreen() {
+        document.getElementById('tournament-overlay').style.display = 'flex';
+        renderBracket();
+        
+        let statusText = document.getElementById('tournament-bracket-status');
+        let startBtn = document.getElementById('start-match-btn');
+        startBtn.style.display = 'none';
+        
+        let stageTitle = "";
+        if (tournament.step === 0) stageTitle = "準々決勝 (Round of 8)";
+        else if (tournament.step === 1) stageTitle = "準決勝 (Semifinals)";
+        else if (tournament.step === 2) stageTitle = "決勝 (Finals)";
+        document.getElementById('tournament-stage-title').innerText = stageTitle;
+
+        statusText.innerText = "🌐 オンラインマッチングサーバーに同期中... 相手の接続を待っています";
+        
+        setTimeout(() => {
+            statusText.innerText = "📡 相手がバトル準備フェーズを完了するのを待機しています...";
+            setTimeout(() => {
+                simulateOtherMatches();
+                renderBracket();
+                statusText.innerText = "🎯 通信同調完了！あなたの対戦の準備が整いました。";
+                startBtn.style.display = 'block';
+            }, 1200);
+        }, 1200);
+    }
+
+    function simulateOtherMatches() {
+        if (tournament.step === 0) {
+            // 他の準々決勝を擬似シミュレート
+            for (let i = 1; i < 4; i++) {
+                let match = tournament.bracket.quarterfinals[i];
+                if (!match.winner) {
+                    match.winner = Math.random() < 0.5 ? match.p1 : match.p2;
+                    addLog(`📡 [試合結果] ${match.p1.name} が ${match.p2.name} に勝利しました。`);
+                }
+            }
+            // 準決勝の枠を設定
+            tournament.bracket.semifinals[0].p1 = tournament.bracket.quarterfinals[0].winner; // (Player or NPC1)
+            tournament.bracket.semifinals[0].p2 = tournament.bracket.quarterfinals[1].winner;
+            tournament.bracket.semifinals[1].p1 = tournament.bracket.quarterfinals[2].winner;
+            tournament.bracket.semifinals[1].p2 = tournament.bracket.quarterfinals[3].winner;
+        } else if (tournament.step === 1) {
+            // 他の準決勝をシミュレート
+            let match = tournament.bracket.semifinals[1];
+            if (!match.winner) {
+                match.winner = Math.random() < 0.5 ? match.p1 : match.p2;
+                addLog(`📡 [試合結果] ${match.p1.name} が ${match.p2.name} に勝利し、決勝へ進出しました。`);
+            }
+            // 決勝の枠を設定
+            tournament.bracket.final.p1 = tournament.bracket.semifinals[0].winner; 
+            tournament.bracket.final.p2 = tournament.bracket.semifinals[1].winner;
+        }
+    }
+
+    function renderBracket() {
+        const renderMatchHelper = (match) => {
+            if (!match) return `<div style="color: #555;">(待機中)</div>`;
+            let p1Name = match.p1 ? match.p1.name : "? ? ?";
+            let p2Name = match.p2 ? match.p2.name : "? ? ?";
+            
+            let p1Style = match.winner === match.p1 ? "color: #2ecc71; font-weight: bold;" : "color: #c9d1d9;";
+            let p2Style = match.winner === match.p2 ? "color: #2ecc71; font-weight: bold;" : "color: #c9d1d9;";
+            
+            if (match.p1 && match.winner && match.winner !== match.p1) p1Style += "text-decoration: line-through; color: #8b949e; opacity: 0.6;";
+            if (match.p2 && match.winner && match.winner !== match.p2) p2Style += "text-decoration: line-through; color: #8b949e; opacity: 0.6;";
+
+            return `
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <div style="${p1Style}">${match.p1 ? match.p1.icon : ""} ${p1Name}</div>
+                    <div style="border-top: 1px dashed #30363d; margin: 2px 0;"></div>
+                    <div style="${p2Style}">${match.p2 ? match.p2.icon : ""} ${p2Name}</div>
+                </div>
+            `;
+        };
+
+        document.getElementById('match-q1').innerHTML = renderMatchHelper(tournament.bracket.quarterfinals[0]);
+        document.getElementById('match-q2').innerHTML = renderMatchHelper(tournament.bracket.quarterfinals[1]);
+        document.getElementById('match-q3').innerHTML = renderMatchHelper(tournament.bracket.quarterfinals[2]);
+        document.getElementById('match-q4').innerHTML = renderMatchHelper(tournament.bracket.quarterfinals[3]);
+
+        document.getElementById('match-s1').innerHTML = renderMatchHelper(tournament.bracket.semifinals[0]);
+        document.getElementById('match-s2').innerHTML = renderMatchHelper(tournament.bracket.semifinals[1]);
+
+        document.getElementById('match-f1').innerHTML = renderMatchHelper(tournament.bracket.final);
+
+        let winnerDiv = document.getElementById('tournament-winner-name');
+        if (tournament.bracket.final && tournament.bracket.final.winner) {
+            winnerDiv.innerText = `${tournament.bracket.final.winner.icon} ${tournament.bracket.final.winner.name}`;
+        } else {
+            winnerDiv.innerText = "? ? ?";
+        }
+    }
+
+    function startCurrentTournamentMatch() {
+        document.getElementById('tournament-overlay').style.display = 'none';
+        
+        let match = null;
+        let opponent = null;
+        if (tournament.step === 0) {
+            match = tournament.bracket.quarterfinals[0];
+            opponent = match.p2;
+        } else if (tournament.step === 1) {
+            match = tournament.bracket.semifinals[0];
+            opponent = match.p2;
+        } else if (tournament.step === 2) {
+            match = tournament.bracket.final;
+            opponent = match.p2;
+        }
+        
+        enterDuelArenaWithOpponent(opponent);
+    }
+
+    function enterDuelArenaWithOpponent(npc) {
+        state.isDuelActive = true; 
+        state.isGatheringPhase = false;
+        
+        // プレイヤーのインフレ段階に合わせて、対戦相手のステータスをアリーナ突入時にスケーリング調整
+        let hpScale = 0.95 + Math.random() * 0.25;
+        let atkScale = 0.9 + Math.random() * 0.25;
+        let speedScale = 0.9 + Math.random() * 0.2;
+        
+        // 決勝戦（ステップ 2）ならさらに手強く補正
+        if (tournament.step === 2) {
+            hpScale += 0.2;
+            atkScale += 0.15;
+        }
+
+        let scaledHp = Math.round(state.player.maxHp * hpScale);
+        let scaledAtk = Math.round(state.player.atk * atkScale);
+        let scaledSpeed = Math.round(state.player.speed * speedScale);
+
+        state.rival = {
+            name: npc.name,
+            hp: scaledHp,
+            maxHp: scaledHp,
+            atk: scaledAtk,
+            speed: scaledSpeed,
+            icon: npc.icon,
+            active: true,
+            type: { name: npc.name },
+            frozen: false,
+            ap: 100,
+            maxAp: 100,
+            charType: npc.charType
+        };
+
+        state.player.ap = state.player.maxAp; 
+        state.player.hp = state.player.maxHp;
+        state.elixirUsed = false;
+        state.penguinShieldTriggered = false;
+
+        document.getElementById('duel-controls-overlay').style.display = 'flex';
+        addLog(`📢 【決戦】 対戦相手 [${state.rival.icon} ${state.rival.name}] との1対1勝負開始！`);
+        
+        let pSpeed = state.player.speed || 10;
+        let rSpeed = state.rival.speed || 10;
+        addLog(`🏃 速度比較：あなた ${pSpeed} VS 相手 ${rSpeed}`);
+
+        if (pSpeed >= rSpeed) {
+            state.duelTurnOwner = "player"; addLog(`🟢 あなたの先手ターンです！`);
+            triggerPlayerTurnStartEffects(); 
+        } else {
+            state.duelTurnOwner = "rival"; addLog(`🔴 相手の先手ターンです！`);
+        }
+
+        state.playerGuarding = false; 
+        state.rivalGuarding = false;
+        rollRivalIntent(); 
+        updateDuelUI();
+        playSound('hit'); 
+        updateUI(); 
+
+        if (state.duelTurnOwner === "rival") { executeRivalDuelTurn(); }
+    }
+
+    function showMatchingScreen() {
+        const matchingOverlay = document.getElementById('matching-overlay');
+        matchingOverlay.style.display = 'flex';
+        let progress = 0;
+        const bar = document.getElementById('matching-bar');
+        const status = document.getElementById('matching-status');
+        
+        status.innerText = "アリーナ同期セッションを確立中...";
+        
+        const interval = setInterval(() => {
+            progress += 10;
+            bar.style.width = `${progress}%`;
+            if (progress === 30) {
+                status.innerText = "アリーナ空間 of 干渉波長を同調中...";
+            } else if (progress === 70) {
+                status.innerText = "ターゲット補足！ ロビー空間への転送準備...";
+            } else if (progress >= 100) {
+                clearInterval(interval);
+                matchingOverlay.style.display = 'none';
+                enterDuelArena();
+            }
+        }, 120);
+    }
+
+    function spawnRival() {
+        // (擬似トーナメント導入に伴い、enterDuelArenaWithOpponent 内に処理を移管)
+    }
+
+    function enterDuelArena() {
+        // (擬似トーナメント導入に伴い、startCurrentTournamentMatch 内に処理を移管)
+    }
+
+    function rollRivalIntent() {
+        let rand = Math.random();
+        let hpRatio = state.rival.hp / state.rival.maxHp;
+        let canHeal = state.rival.ap >= 40;
+        let canHeavy = state.rival.ap >= 30;
+
+        let charType = state.rival.charType;
+        if (charType === 'bear') {
+            if (rand < 0.5 && canHeavy) {
+                state.rivalIntent = { type: "heavy", name: "💥 渾身 of 猛撃", desc: "くまのパワーによる超強力な一撃！" };
+                state.rival.ap -= 30;
+            } else {
+                state.rivalIntent = { type: "normal", name: "⚔️ 勇者 of 大剣", desc: "基本的な武器による痛烈な攻撃" };
+            }
+        } else if (charType === 'frog') {
+            if (hpRatio < 0.4 && rand < 0.5 && canHeal) {
+                state.rivalIntent = { type: "heal", name: "🧪 湧き水 of 秘薬", desc: "湧き水の力でHPを回復します" };
+                state.rival.ap -= 40;
+            } else {
+                state.rivalIntent = { type: "normal", name: "🗡️❄️ 氷雪レイピア連撃", desc: "素早い突き攻撃" };
+            }
+        } else if (charType === 'fox') {
+            if (rand < 0.4 && canHeavy) {
+                state.rivalIntent = { type: "heavy", name: "🦊🍘 油揚げ of 加護爆発", desc: "クリティカル率の高い奇襲" };
+                state.rival.ap -= 30;
+            } else {
+                state.rivalIntent = { type: "normal", name: "🍳🧄 ガーリックパン打撃", desc: "ガーリックステーキパンを振り回す" };
+            }
+        } else if (charType === 'penguin') {
+            if (hpRatio < 0.5 && rand < 0.6 && canHeal) {
+                state.rivalIntent = { type: "heal", name: "❄️ 万年雪 of 防壁", desc: "守りを固めつつ回復を試みる" };
+                state.rival.ap -= 40;
+            } else if (rand < 0.3 && canHeavy) {
+                state.rivalIntent = { type: "heavy", name: "🔱 スパイクシールド突進", desc: "盾 of トゲを利用したカウンター攻撃" };
+                state.rival.ap -= 30;
+            } else {
+                state.rivalIntent = { type: "normal", name: "🛡️✨ 鉄壁 of 通常攻撃", desc: "堅実にダメージを蓄積する" };
+            }
+        } else {
+            if (rand < 0.35 && canHeavy) {
+                state.rivalIntent = { type: "heavy", name: "🦴💚 毒 of 噛みつき", desc: "トゲの首輪と毒を組み合わせた痛烈な一撃" };
+                state.rival.ap -= 30;
+            } else {
+                state.rivalIntent = { type: "normal", name: "⚔️ 通常攻撃", desc: "牙と爪で攻め立てる" };
+            }
+        }
+    }
+
+    function changePlayerAp(amount) {
+        let prevAp = state.player.ap;
+        state.player.ap = Math.min(state.player.maxAp, state.player.ap + amount);
+
+        let isFrog = state.player.charType === 'frog';
+        let springDewCount = state.backpack.filter(item => item.id === 'spring_dew').length;
+        if (isFrog && springDewCount > 0 && prevAp < state.player.maxAp && state.player.ap >= state.player.maxAp) {
+            state.player.springDewDamageBonus = (state.player.springDewDamageBonus || 0) + 5;
+            addLog(`💧 湧き水の雫！APが満タンになり、次の攻撃ダメージが一時的に +5 されました！`);
+        }
+    }
+
+    function triggerFairyHealingSpiritInDuel() {
+        let spiritCount = state.backpack.filter(item => item.id === 'healing_spirit').length;
+        if (spiritCount > 0) {
+            let healVal = spiritCount * 5;
+            state.player.hp = Math.min(state.player.maxHp, state.player.hp + healVal);
+            addLog(`🧚‍♂️ 治癒 of 精霊があなたのHPを ${healVal} 回復しました。`);
+            let px = 250, py = 250;
+            createParticles(px, py, "#a29bfe", 8);
+            addFloatingText(px, py - 20, `+${healVal} HP`, "#a29bfe");
+            playSound('heal');
+        }
+    }
+
+    function triggerPlayerTurnStartEffects() {
+        if (!state.isDuelActive || state.gameOver) return;
+        if(!state.duelSkillCooldowns)state.duelSkillCooldowns={}; Object.keys(state.duelSkillCooldowns).forEach(k=>{if(state.duelSkillCooldowns[k]>0)state.duelSkillCooldowns[k]--;});
+
+        triggerFairyHealingSpiritInDuel();
+
+        let isBear = state.player.charType === 'bear';
+        let isFrog = state.player.charType === 'frog';
+
+        // 生命の源泉の効果：AP満タン時最大HPの5%(かえるは10%)シールド獲得
+        let fountainCount = state.backpack.filter(item => item.id === 'fountain_of_life').length;
+        if (fountainCount > 0 && state.player.ap >= state.player.maxAp) {
+            let shieldPercent = isFrog ? 0.10 : 0.05;
+            let shieldVal = Math.round(state.player.maxHp * shieldPercent) * fountainCount;
+            state.player.hp += shieldVal; 
+            addLog(`🏺💧 生命の源泉！ AP満タンにつき最大HP of ${Math.round(shieldPercent * 100)}% 分のシールド（+${shieldVal} HP）を獲得！`);
+            let px = 250, py = 250;
+            createParticles(px, py, "#3498db", 15);
+            addFloatingText(px, py - 40, `+${shieldVal} SHIELD`, "#3498db");
+            playSound('heal');
+        }
+
+        state.backpack.forEach(item => {
+            if (item.id === 'honey') {
+                let mult = isBear ? 2 : 1;
+                let adjacentSummons = state.backpack.filter(other => 
+                    other.type === 'summon' && areItemsAdjacent(item, other)
+                ).length;
+                if (adjacentSummons > 0) {
+                    let honeyApRegen = (2 * mult) * adjacentSummons;
+                    changePlayerAp(honeyApRegen);
+                    addLog(`🍯 ハチミツの専用シナジー！ APが ${honeyApRegen} 回復。`);
+                }
+            }
+        });
+
+        state.backpack.forEach(item => {
+            if (item.id === 'spring_dew') {
+                let mult = isFrog ? 2 : 1;
+                let adjacentFoods = state.backpack.filter(other => 
+                    other.type === 'food' && areItemsAdjacent(item, other)
+                ).length;
+                if (adjacentFoods > 0) {
+                    let springDewApRegen = (2 * mult) * adjacentFoods;
+                    changePlayerAp(springDewApRegen);
+                    addLog(`💧 湧き水の雫の専用シナジー！ APが ${springDewApRegen} 回復。`);
+                }
+            }
+        });
+
+        updateDuelUI();
+    }
+
+    function getMagicHerbDiscount() {
+        let herbCount = state.backpack.filter(item => item.id === 'magic_herb').length;
+        return Math.pow(0.95, herbCount);
+    }
+
+    function getEternalSnowWarmerReduction() {
+        let isPenguin = state.player.charType === 'penguin';
+        let mult = isPenguin ? 2 : 1;
+        let reduction = 0;
+
+        state.backpack.forEach(item => {
+            if (item.id === 'eternal_snow_warmer') {
+                let adjacentShields = state.backpack.filter(other => 
+                    other.type === 'shield' && areItemsAdjacent(item, other)
+                ).length;
+                reduction += (1 * mult) * adjacentShields;
+            }
+        });
+        return reduction;
+    }
+
+    function executeRivalDuelTurn() {
+        if (!state.isDuelActive || state.gameOver) return;
+        state.duelTurnOwner = "rival"; 
+
+        state.rival.ap = Math.min(state.rival.maxAp, state.rival.ap + 15);
+
+        updateDuelUI();
+
+        if (state.rival.frozen) {
+            state.rival.frozen = false;
+            addLog(`❄️ 相手はカチコチに凍りついて動けない！`);
+            setTimeout(() => {
+                state.duelTurnOwner = "player";
+                rollRivalIntent();
+                updateDuelUI();
+                triggerPlayerTurnStartEffects(); 
+            }, 1000);
+            return;
+        }
+
+        addLog(`⏳ 相手がコマンドを選択中...`);
+
+        setTimeout(() => {
+            if (state.gameOver || !state.isDuelActive) return;
+            let intent = state.rivalIntent.type;
+            let dmg = state.rival.atk;
+
+            if (intent === "normal" || intent === "heavy") {
+                if (intent === "heavy") {
+                    dmg = Math.round(dmg * 1.8);
+                }
+                if (state.playerGuarding) {
+                    dmg = Math.max(1, Math.round(dmg * 0.4)); 
+                    addLog(`🛡️ 防御！ ダメージを大幅にカットしました！`);
+                }
+                
+                let ironCount = state.backpack.filter(item => item.id === 'iron_shield').length;
+                dmg = Math.max(1, dmg - (ironCount * 3));
+
+                dmg = Math.max(1, dmg - getEternalSnowWarmerReduction());
+
+                state.player.hp = Math.max(0, state.player.hp - dmg);
+                addLog(`💥 相手の攻撃！ あなたは ${dmg} ダメージを受けた！`);
+
+                let isPenguin = state.player.charType === 'penguin';
+                let warmerCount = state.backpack.filter(item => item.id === 'eternal_snow_warmer').length;
+                if (isPenguin && warmerCount > 0 && !state.penguinShieldTriggered && (state.player.hp / state.player.maxHp <= 0.5) && state.player.hp > 0) {
+                    state.penguinShieldTriggered = true;
+                    let shieldVal = Math.round(state.player.maxHp * 0.15);
+                    state.player.hp += shieldVal; 
+                    addLog(`❄️ 万年雪のカイロの専用効果！ HPが50%以下になり最大HPの15%分の一時シールド（HP +${shieldVal}）を獲得！`);
+                    let px = 250, py = 250;
+                    createParticles(px, py, "#74b9ff", 20);
+                    addFloatingText(px, py - 40, `+${shieldVal} SHIELD`, "#74b9ff");
+                    playSound('heal');
+                }
+
+                let collarCount = state.backpack.filter(item => item.id === 'collar').length;
+                let spikeShieldCount = state.backpack.filter(item => item.id === 'spiked_shield').length;
+                let rottenCount = state.backpack.filter(item => item.id === 'rotten_banana').length;
+                let poisonCollarCount = state.backpack.filter(item => item.id === 'poison_collar').length;
+
+                let totalCounter = 0;
+                totalCounter += collarCount * 5;
+                totalCounter += spikeShieldCount * 10;
+                totalCounter += rottenCount * 6;
+                totalCounter += poisonCollarCount * 8;
+
+                // 万年雪のスパイクカラー効果：カウンターダメージ＋相手速度低下
+                let snowCollarCount = state.backpack.filter(item => item.id === 'snow_spike_collar').length;
+                if (snowCollarCount > 0) {
+                    let mult = isPenguin ? 2 : 1;
+                    let counterDmg = 6 * mult * snowCollarCount;
+                    totalCounter += counterDmg;
+
+                    state.rival.speed = Math.max(1, state.rival.speed - 2);
+                    addLog(`❄️ 万年雪の冷気により、相手の速度が低下！ (現在速度: ${state.rival.speed})`);
+                }
+
+                if (totalCounter > 0) {
+                    state.rival.hp = Math.max(0, state.rival.hp - totalCounter);
+                    addLog(`🛡️ トゲと呪いの反撃！ 相手に ${totalCounter} ダメージ！`);
+                    let rx = 670, ry = 250;
+                    createParticles(rx, ry, "#e74c3c", 10);
+                    addFloatingText(rx, ry - 40, `💥 -${totalCounter}`, "#e74c3c");
+                    
+                    if (state.rival.hp <= 0) {
+                        state.rival.active = false;
+                        setTimeout(() => { handleDuelVictory(); }, 500);
+                        return;
+                    }
+                }
+
+                let elixirCount = state.backpack.filter(item => item.id === 'elixir').length;
+                if (elixirCount > 0 && !state.elixirUsed && (state.player.hp / state.player.maxHp <= 0.3) && state.player.hp > 0) {
+                    state.elixirUsed = true;
+                    let healVal = elixirCount * 20; 
+                    state.player.hp = Math.min(state.player.maxHp, state.player.hp + healVal);
+                    addLog(`🏺 秘薬（エリクサー）自動発動！ あなたのHPが ${healVal} 回復しました！`);
+                    let px = 250, py = 250;
+                    createParticles(px, py, "#9b59b6", 20);
+                    addFloatingText(px, py - 40, `+${healVal} HP`, "#9b59b6");
+                    playSound('heal');
+                }
+
+            } else if (intent === "heal") {
+                let healVal = Math.round(state.rival.maxHp * 0.25);
+                state.rival.hp = Math.min(state.rival.maxHp, state.rival.hp + healVal);
+                addLog(`🧪 相手は修復術を使用！ HPが ${healVal} 回復。`);
+            }
+
+            state.playerGuarding = false;
+            let px = 250, py = 250; 
+            createParticles(px, py, "#f85149", 15);
+            addFloatingText(px, py - 40, `-${dmg} HP`, "#f85149");
+            playSound('damage'); 
+            triggerShake(6);
+
+            if (state.player.hp <= 0) {
+                handleGameOver();
+            } else {
+                state.duelTurnOwner = "player";
+                rollRivalIntent();
+                updateDuelUI();
+                triggerPlayerTurnStartEffects(); 
+            }
+        }, 1200);
+    }
+
+    function renderDuelActions() {
+        const grid = document.getElementById('duel-actions-grid');
+        if (!grid) return;
+        grid.innerHTML = "";
+
+        const isMyTurn = (state.duelTurnOwner === "player" && !state.gameOver && state.isDuelActive);
+
+        applySynergies(state.backpack);
+        const weapons = state.backpack.filter(item => item.type === 'weapon');
+
+        const herbDiscount = getMagicHerbDiscount();
+
+        if (weapons.length === 0) {
+            const btn = document.createElement('button');
+            btn.style.cssText = "background: #555; border-color: #777; color: #fff; padding: 5px; font-size: 0.72rem; height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2;";
+            
+            const totalDmg = 5 + state.player.atk;
+            const apCost = Math.round(10 * herbDiscount);
+            btn.innerHTML = `<strong>👊 素手 (${apCost} AP)</strong><span style="font-size:0.6rem; color:#f1c40f;">通常ダメージ: ${totalDmg}</span>`;
+            
+            const canUse = isMyTurn && (state.player.ap >= apCost);
+            if (!canUse) {
+                btn.disabled = true;
+                btn.style.opacity = "0.5";
+                btn.style.cursor = "not-allowed";
+            } else {
+                btn.onclick = () => duelExecuteWeaponAction(null);
+            }
+            grid.appendChild(btn);
+        } else {
+            weapons.forEach(wpn => {
+                const btn = document.createElement('button');
+                const wpnDmg = wpn.damage + (wpn.bonusDamage || 0);
+                
+                const baseApCost = wpn.apCost || Math.max(10, Math.round(wpnDmg * 1.8));
+                const apCost = Math.round(baseApCost * herbDiscount);
+                
+                btn.style.cssText = `background: #802217; border-color: ${wpn.color || '#e74c3c'}; color: #fff; padding: 5px; font-size: 0.72rem; height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2;`;
+                
+                const currentBonus = state.player.springDewDamageBonus || 0;
+                const totalDmg = wpnDmg + state.player.atk + currentBonus;
+
+                let wpnCrit = state.player.crit || 5;
+                let adjacentClovers = state.backpack.filter(other => 
+                    other.id === 'clover_bookmark' && areItemsAdjacent(wpn, other)
+                ).length;
+                wpnCrit += adjacentClovers * 1;
+                if (wpn.id === 'lucky_rapier') {
+                    wpnCrit += 5;
+                }
+
+                let bonusDesc = `攻撃: ${totalDmg} (🎯${wpnCrit}%)`;
+                if (wpn.id === 'poison_dagger') bonusDesc += " (+毒5)";
+                if (wpn.id === 'frost_rapier') bonusDesc += " (凍結1.5x)";
+                if (wpn.id === 'frozen_meat') bonusDesc += " (凍結付与)";
+                if (wpn.id === 'lucky_rapier') bonusDesc += " [会心1.8x]";
+                if (wpn.id === 'honey_roast_meat') bonusDesc += " (AP回復)";
+                if (currentBonus > 0) bonusDesc += ` (+雫${currentBonus})`;
+
+                btn.innerHTML = `<strong>${wpn.icon} ${wpn.name} (${apCost} AP)</strong><span style="font-size:0.6rem; color:#f1c40f;">${bonusDesc}</span>`;
+                
+                const canUse = isMyTurn && (state.player.ap >= apCost);
+                if (!canUse) {
+                    btn.disabled = true;
+                    btn.style.opacity = "0.5";
+                    btn.style.cursor = "not-allowed";
+                } else {
+                    btn.onclick = () => {
+                        initAudio();
+                        duelExecuteWeaponAction(wpn);
+                    };
+                }
+                grid.appendChild(btn);
+            });
+        }
+
+        // --- 習得済みの決戦アクティブスキル（二段攻撃など）のボタンを追加 ---
+        const ownedDuelActions = {};
+        (state.skills || []).forEach(sk => {
+            if (sk.duelAction) {
+                ownedDuelActions[sk.duelAction] = (ownedDuelActions[sk.duelAction] || 0) + 1;
+            }
+        });
+        const primaryWeapon = weapons.length > 0 ? weapons[0] : null;
+        const primaryWpnDmg = primaryWeapon ? (primaryWeapon.damage + (primaryWeapon.bonusDamage || 0)) : 5;
+        const primaryBaseApCost = primaryWeapon ? (primaryWeapon.apCost || Math.max(10, Math.round(primaryWpnDmg * 1.8))) : 10;
+
+        const DUEL_SKILL_INFO = {
+            double_strike: {
+                label: '⚔️⚔️ 二段攻撃',
+                apMult: 1.6,
+                color: '#e67e22',
+                descFn: (apCost) => `武器攻撃を2回 (${apCost} AP)`,
+                exec: () => duelExecuteDoubleStrike()
+            },
+            power_smash: {
+                label: '💥 渾身の一撃',
+                apMult: 2.2,
+                color: '#c0392b',
+                descFn: (apCost) => `約2倍ダメージ (${apCost} AP)`,
+                exec: () => duelExecutePowerSmash()
+            },
+            life_drain: {
+                label: '🩸 生命奪取の一撃',
+                apMult: 1.15, cooldown: 2,
+                color: '#8e44ad',
+                descFn: (apCost,cd) => `与ダメの30%を回復 (${apCost} AP)${cd?' / CD'+cd:''}`,
+                exec: () => duelExecuteLifeDrainStrike()
+            },
+            piercing_thrust:{label:'🗡️ 貫通突き',apMult:1.7,cooldown:3,color:'#3498db',descFn:(ap,cd)=>`防御無視 (${ap} AP)${cd?' / CD'+cd:''}`,exec:()=>duelExecutePiercingThrust()},
+            emergency_heal:{label:'💚 緊急治療',apMult:1.0,cooldown:4,color:'#2ecc71',descFn:(ap,cd)=>`HP20%回復 (${ap} AP)${cd?' / CD'+cd:''}`,exec:()=>duelExecuteEmergencyHeal()}
+        };
+
+        Object.keys(ownedDuelActions).forEach(actionId => {
+            const info = DUEL_SKILL_INFO[actionId];
+            if (!info) return;
+            const apCost = Math.round(primaryBaseApCost * info.apMult * herbDiscount);
+            const cooldown=Math.max(0,(state.duelSkillCooldowns||{})[actionId]||0);
+            const btn = document.createElement('button');
+            btn.style.cssText = `background: #3a1f10; border-color: ${info.color}; color: #fff; padding: 5px; font-size: 0.72rem; height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2;`;
+            btn.innerHTML = `<strong>${info.label}</strong><span style="font-size:0.6rem; color:#f1c40f;">${info.descFn(apCost)}</span>`;
+
+            const canUse = isMyTurn && (state.player.ap >= apCost);
+            if (!canUse) {
+                btn.disabled = true;
+                btn.style.opacity = "0.5";
+                btn.style.cursor = "not-allowed";
+            } else {
+                btn.onclick = () => {
+                    initAudio();
+                    info.exec();
+                };
+            }
+            grid.appendChild(btn);
+        });
+
+        const guardApRecover = 25;
+        const guardBtn = document.createElement('button');
+        guardBtn.style.cssText = "background: #2980b9; border-color: #3498db; color: #fff; padding: 5px; font-size: 0.75rem; height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2;";
+        guardBtn.innerHTML = `<strong>🛡️ 防御 (+${guardApRecover} AP)</strong><span style="font-size:0.6rem; color:#a3e4d7;">ダメージ60%カット</span>`;
+        
+        if (!isMyTurn) {
+            guardBtn.disabled = true;
+            guardBtn.style.opacity = "0.5";
+            guardBtn.style.cursor = "not-allowed";
+        } else {
+            guardBtn.onclick = () => {
+                initAudio();
+                duelExecuteGuardAction();
+            };
+        }
+        grid.appendChild(guardBtn);
+    }
+
+    function duelExecuteWeaponAction(wpn) {
+        if (state.duelTurnOwner !== "player" || state.gameOver) return;
+
+        let meatCount = state.backpack.filter(item => item.id === 'frozen_meat').length;
+        let rapierCount = state.backpack.filter(item => item.id === 'frost_rapier').length;
+        let fairyCount = state.backpack.filter(item => item.id === 'fairy_bottle').length;
+        let poisonDaggerCount = state.backpack.filter(item => item.id === 'poison_dagger').length;
+
+        let wpnDamage = wpn ? (wpn.damage + (wpn.bonusDamage || 0)) : 5;
+        let baseApCost = wpn ? (wpn.apCost || Math.max(10, Math.round(wpnDamage * 1.8))) : 10;
+        
+        let apCost = Math.round(baseApCost * getMagicHerbDiscount());
+
+        if (state.player.ap < apCost) {
+            addLog("⚡ APが不足しています！『防御』でAPを蓄積してください。");
+            return;
+        }
+        state.player.ap -= apCost;
+
+        let missChance = (wpn && wpn.apCost > 20) ? 0.15 : 0.0; 
+        
+        if (Math.random() < missChance) {
+            addLog(`💨 渾身の一撃は空を斬った！ (ミス)`);
+            let rx = 670, ry = 250;
+            addFloatingText(rx, ry - 50, `MISS`, "#7f8c8d"); 
+            playSound('mine');
+            executeRivalDuelTurn(); 
+            updateDuelUI();
+            return;
+        }
+
+        let springBonus = state.player.springDewDamageBonus || 0;
+        let baseDamage = wpnDamage + state.player.atk + springBonus;
+
+        if (springBonus > 0) {
+            state.player.springDewDamageBonus = 0;
+        }
+
+        if (state.rival.frozen && wpn && wpn.id === 'frost_rapier') {
+            baseDamage = Math.round(baseDamage * 1.5);
+            addLog(`🗡️❄️ 氷雪 of レイピア特効！ 凍結した相手に会心ダメージ1.5倍！`);
+        }
+
+        let currentCrit = state.player.crit || 5;
+        let critMultiplier = 1.5;
+
+        if (wpn) {
+            let adjacentClovers = state.backpack.filter(other => 
+                other.id === 'clover_bookmark' && areItemsAdjacent(wpn, other)
+            ).length;
+            currentCrit += adjacentClovers * 1;
+
+            if (wpn.id === 'lucky_rapier') {
+                currentCrit += 5;       
+                critMultiplier = 1.8;   
+            }
+        }
+
+        let isCrit = Math.random() < (currentCrit / 100);
+        if (isCrit) {
+            baseDamage = Math.round(baseDamage * critMultiplier);
+        }
+
+        state.rival.hp = Math.max(0, state.rival.hp - baseDamage);
+        const actionName = wpn ? `${wpn.icon} ${wpn.name}` : "👊 素手";
+        if (isCrit) {
+            addLog(`🎯 会心の一撃！ あなたの ${actionName} 攻撃！ 相手に ${baseDamage} ダメージ！`);
+        } else {
+            addLog(`⚔️ あなたの ${actionName} 攻撃！ 相手に ${baseDamage} ダメージ！`);
+        }
+
+        let rx = 670, ry = 250; 
+        createParticles(rx, ry, wpn ? wpn.color : "#bdc3c7", 15); 
+        addFloatingText(rx, ry - 50, `-${baseDamage}`, isCrit ? "#ff7675" : "#f1c40f");
+        playSound('hit'); 
+        triggerShake(6);
+
+        // ハニーロースト肉の効果：AP少量回復 ＋ 隣接する召喚アイテム数×3
+        if (wpn && wpn.id === 'honey_roast_meat') {
+            let baseApHeal = 3;
+            let adjacentSummons = state.backpack.filter(other => 
+                other.type === 'summon' && areItemsAdjacent(wpn, other)
+            ).length;
+            let totalApHeal = baseApHeal + adjacentSummons * 3;
+            changePlayerAp(totalApHeal);
+            addLog(`🍖 ハニーロースト肉の効果！ APが ${totalApHeal} 回復しました。`);
+        }
+
+        let vampireCount = state.backpack.filter(item => item.id === 'vampire_grail').length;
+        if (vampireCount > 0) {
+            let drainVal = Math.round(baseDamage * 0.05 * vampireCount);
+            if (drainVal > 0) {
+                state.player.hp = Math.min(state.player.maxHp, state.player.hp + drainVal);
+                addLog(`🍷 吸血鬼の聖杯！ 与えたダメージからHPを ${drainVal} 回復しました。`);
+                let px = 250, py = 250;
+                addFloatingText(px, py - 30, `+${drainVal} HP`, "#ff7675");
+                playSound('heal');
+            }
+        }
+
+        if (wpn && wpn.id === 'heavy_iron_ball') {
+            state.rival.ap = Math.max(0, state.rival.ap - 5);
+            addLog(`🍒 重たい鉄球の衝撃！ 相手のAPを 5 減少させました（残りAP: ${state.rival.ap}）。`);
+        }
+
+        if (fairyCount > 0) {
+            let fDmg = fairyCount * 5;
+            state.rival.hp = Math.max(0, state.rival.hp - fDmg);
+            addLog("🧚‍♀️ 妖精の矢！ " + state.rival.name + " に " + fDmg + " ダメージ！");
+            addFloatingText(rx, ry - 30, `-${fDmg}`, "#fd79a8");
+        }
+
+        if (poisonDaggerCount > 0 || (wpn && wpn.id === 'poison_dagger')) {
+            let pDmg = 5;
+            if (wpn && wpn.id === 'poison_dagger') pDmg = 8; 
+            state.rival.hp = Math.max(0, state.rival.hp - pDmg);
+            addLog(`🗡️💚 毒の追加攻撃！ 相手に ${pDmg} ダメージ！`);
+            addFloatingText(rx, ry - 10, `-${pDmg}`, "#2ecc71");
+        }
+
+        let freezeChance = 0;
+        if (wpn) {
+            if (wpn.id === 'frozen_meat') freezeChance = 0.2;
+            if (wpn.id === 'frost_rapier') freezeChance = 0.4;
+        }
+        if (Math.random() < freezeChance && !state.rival.frozen) {
+            state.rival.frozen = true;
+            addLog(`❄️ 相手はガチガチに凍りついた！ (次ターンスキップ)`);
+        }
+
+        if (state.rival.hp <= 0) {
+            state.rival.active = false; 
+            handleDuelVictory();
+        } else { 
+            executeRivalDuelTurn(); 
+        }
+        updateDuelUI();
+    }
+
+    // --- 決戦アクティブスキル共通ヘルパー ---
+    function getPrimaryDuelWeapon() {
+        const weapons = state.backpack.filter(item => item.type === 'weapon');
+        return weapons.length > 0 ? weapons[0] : null;
+    }
+
+    function computeDuelCritInfo(wpn) {
+        let currentCrit = state.player.crit || 5;
+        let critMultiplier = 1.5;
+        if (wpn) {
+            let adjacentClovers = state.backpack.filter(other =>
+                other.id === 'clover_bookmark' && areItemsAdjacent(wpn, other)
+            ).length;
+            currentCrit += adjacentClovers * 1;
+            if (wpn.id === 'lucky_rapier') {
+                currentCrit += 5;
+                critMultiplier = 1.8;
+            }
+        }
+        return { chance: currentCrit, multiplier: critMultiplier };
+    }
+
+    // 決戦アクティブスキルの使用回数に応じたAP消費・威力の共通処理
+    function duelActiveSkillPrelude(actionId, apMultiplier) {
+        if (state.duelTurnOwner !== "player" || state.gameOver) return null;
+        const wpn = getPrimaryDuelWeapon();
+        const wpnDamage = wpn ? (wpn.damage + (wpn.bonusDamage || 0)) : 5;
+        const baseApCost = wpn ? (wpn.apCost || Math.max(10, Math.round(wpnDamage * 1.8))) : 10;
+        const apCost = Math.round(baseApCost * apMultiplier * getMagicHerbDiscount());
+        const cd=Math.max(0,(state.duelSkillCooldowns||{})[actionId]||0); if(cd>0){addLog(`⏳ スキルはあと ${cd} ターン使用できません。`);return null;}
+
+        if (state.player.ap < apCost) {
+            addLog("⚡ APが不足しています！『防御』でAPを蓄積してください。");
+            return null;
+        }
+        state.player.ap -= apCost;
+        if(!state.duelSkillCooldowns)state.duelSkillCooldowns={}; state.duelSkillCooldowns[actionId]=({double_strike:2,power_smash:3,life_drain:2,piercing_thrust:3,emergency_heal:4})[actionId]||2;
+        return { wpn, wpnDamage, apCost };
+    }
+
+    function duelFinishPlayerAction() {
+        if (state.rival.hp <= 0) {
+            state.rival.active = false;
+            handleDuelVictory();
+        } else {
+            executeRivalDuelTurn();
+        }
+        updateDuelUI();
+    }
+
+    function duelExecutePiercingThrust(){const prep=duelActiveSkillPrelude('piercing_thrust',1.7);if(!prep)return;const d=Math.max(1,Math.round((prep.wpnDamage+state.player.atk)*1.45));state.rival.hp=Math.max(0,state.rival.hp-d);addLog(`🗡️💫 【貫通突き】${d}ダメージ！`);addFloatingText(670,200,`-${d}`,'#58a6ff');playSound('hit');duelFinishPlayerAction();}
+    function duelExecuteEmergencyHeal(){const prep=duelActiveSkillPrelude('emergency_heal',1.0);if(!prep)return;const h=Math.max(1,Math.round(state.player.maxHp*.2));state.player.hp=Math.min(state.player.maxHp,state.player.hp+h);addLog(`💚 【緊急治療】HP +${h}`);playSound('heal');duelFinishPlayerAction();}
+
+    function duelExecuteDoubleStrike() {
+        const prep = duelActiveSkillPrelude('double_strike', 1.6);
+        if (!prep) return;
+        const { wpn, wpnDamage } = prep;
+        const springBonus = state.player.springDewDamageBonus || 0;
+        if (springBonus > 0) state.player.springDewDamageBonus = 0;
+
+        const critInfo = computeDuelCritInfo(wpn);
+        const actionName = wpn ? `${wpn.icon} ${wpn.name}` : "👊 素手";
+        addLog(`⚔️⚔️ あなたは【二段攻撃】を発動！ ${actionName} を続けて2回叩き込む！`);
+
+        let totalDamage = 0;
+        for (let hit = 0; hit < 2; hit++) {
+            let hitDamage = Math.round((wpnDamage + state.player.atk + (hit === 0 ? springBonus : 0)) * 0.68);
+            const isCrit = Math.random() < (critInfo.chance / 100);
+            if (isCrit) hitDamage = Math.round(hitDamage * critInfo.multiplier);
+            state.rival.hp = Math.max(0, state.rival.hp - hitDamage);
+            totalDamage += hitDamage;
+
+            let rx = 670, ry = 250;
+            createParticles(rx, ry, wpn ? wpn.color : "#bdc3c7", 12);
+            addFloatingText(rx, ry - 50 - hit * 16, `-${hitDamage}${isCrit ? ' 🎯' : ''}`, isCrit ? "#ff7675" : "#f1c40f");
+
+            if (state.rival.hp <= 0) break;
+        }
+        addLog(`💥 2連撃で合計 ${totalDamage} ダメージ！`);
+        playSound('hit');
+        triggerShake(7);
+        duelFinishPlayerAction();
+    }
+
+    function duelExecutePowerSmash() {
+        const prep = duelActiveSkillPrelude('power_smash', 2.2);
+        if (!prep) return;
+        const { wpn, wpnDamage } = prep;
+        const springBonus = state.player.springDewDamageBonus || 0;
+        if (springBonus > 0) state.player.springDewDamageBonus = 0;
+
+        const critInfo = computeDuelCritInfo(wpn);
+        let damage = Math.round((wpnDamage + state.player.atk + springBonus) * 2.0);
+        const isCrit = Math.random() < (critInfo.chance / 100);
+        if (isCrit) damage = Math.round(damage * critInfo.multiplier);
+
+        state.rival.hp = Math.max(0, state.rival.hp - damage);
+        const actionName = wpn ? `${wpn.icon} ${wpn.name}` : "👊 素手";
+        addLog(`💥 あなたは【渾身の一撃】を発動！ ${actionName} で ${damage} もの大ダメージ！`);
+
+        let rx = 670, ry = 250;
+        createParticles(rx, ry, "#e74c3c", 22);
+        addFloatingText(rx, ry - 50, `-${damage}${isCrit ? ' 🎯会心！' : ''}`, isCrit ? "#ff7675" : "#f1c40f");
+        playSound('hit');
+        triggerShake(10);
+        duelFinishPlayerAction();
+    }
+
+    function duelExecuteLifeDrainStrike() {
+        const prep = duelActiveSkillPrelude('life_drain', 1.3);
+        if (!prep) return;
+        const { wpn, wpnDamage } = prep;
+        const springBonus = state.player.springDewDamageBonus || 0;
+        if (springBonus > 0) state.player.springDewDamageBonus = 0;
+
+        const critInfo = computeDuelCritInfo(wpn);
+        let damage = Math.round(wpnDamage + state.player.atk + springBonus);
+        const isCrit = Math.random() < (critInfo.chance / 100);
+        if (isCrit) damage = Math.round(damage * critInfo.multiplier);
+
+        state.rival.hp = Math.max(0, state.rival.hp - damage);
+        const healVal = Math.max(1, Math.round(damage * 0.4));
+        state.player.hp = Math.min(state.player.maxHp, state.player.hp + healVal);
+
+        const actionName = wpn ? `${wpn.icon} ${wpn.name}` : "👊 素手";
+        addLog(`🩸 あなたは【生命奪取の一撃】を発動！ ${actionName} で ${damage} ダメージ！ 自身のHPが ${healVal} 回復！`);
+
+        let rx = 670, ry = 250;
+        createParticles(rx, ry, "#e84393", 16);
+        addFloatingText(rx, ry - 50, `-${damage}${isCrit ? ' 🎯' : ''}`, isCrit ? "#ff7675" : "#f1c40f");
+        let px = 250, py = 250;
+        addFloatingText(px, py - 40, `+${healVal} HP`, "#2ecc71");
+        playSound('hit');
+        triggerShake(7);
+        duelFinishPlayerAction();
+    }
+
+    function duelExecuteGuardAction() {
+        if (state.duelTurnOwner !== "player" || state.gameOver) return;
+        changePlayerAp(25);
+        state.playerGuarding = true;
+        addLog(`🛡️ あなたは防御を固めた！ 次の被ダメージを 60% 軽減し、APが 25 回復します。`);
+        playSound('craft'); 
+        executeRivalDuelTurn();
+        updateDuelUI();
+    }
+
+    function handleDuelVictory() {
+        document.getElementById('duel-controls-overlay').style.display = 'none';
+        
+        let match = null;
+        if (tournament.step === 0) {
+            match = tournament.bracket.quarterfinals[0];
+        } else if (tournament.step === 1) {
+            match = tournament.bracket.semifinals[0];
+        } else if (tournament.step === 2) {
+            match = tournament.bracket.final;
+        }
+        
+        match.winner = tournament.players[0]; // プレイヤー自身を勝利に登録
+        addLog(`🏆 決戦に勝利！サーバーの対戦結果を同期します。`);
+
+        const overlay = document.getElementById('victory-overlay');
+        overlay.style.display = 'flex';
+        
+        const h1 = overlay.querySelector('h1');
+        const p1 = overlay.querySelectorAll('p')[0];
+        const p2 = overlay.querySelectorAll('p')[1];
+        const btn = overlay.querySelector('button');
+        
+        if (tournament.step < 2) {
+            let stageName = tournament.step === 0 ? "準々決勝" : "準決勝";
+            let nextStageName = tournament.step === 0 ? "準決勝" : "決勝";
+            let nextMatchRound = 1 * (tournament.step + 2); // 次の対戦ラウンド
+            
+            h1.innerText = "⚔️ MATCH VICTORY! ⚔️";
+            p1.innerText = `${stageName}に勝利しました！`;
+            p2.innerText = `バックパック、装備、ステータス、ゴールドすべてを引き継ぎ、次の探索フェーズへ進みます。\n探索 → ショップを行い、第 ${nextMatchRound} ラウンドの「${nextStageName}」へ挑みましょう！`;
+            btn.innerText = "🗺️ 次の探索フェーズへ";
+            btn.onclick = () => {
+                overlay.style.display = 'none';
+                tournament.step++; // 次のトーナメントステップへ
+                startGatheringPhase();
+            };
+        } else {
+            // 決勝で勝利 = 優勝
+            h1.innerText = "🏆 TOURNAMENT CHAMPION! 🏆";
+            p1.innerText = "オンライン・トーナメント完全制覇！";
+            p2.innerText = "おめでとうございます！並みいる強豪のバッグ構成を撃破し、見事アリーナの頂点に立ちました！";
+            btn.innerText = "🏠 タイトル画面に戻る";
+            btn.onclick = () => {
+                overlay.style.display = 'none';
+                restartGameToTitle();
+            };
+        }
+        playSound('craft');
+    }
+
+    function nextSeason() {
+        // (トーナメント移行に伴い、勝利ボタンのアクションは handleDuelVictory 内で制御)
+    }
+
+    function selectChar(type) {
+        initAudio();
+        state.player.charType = type;
+        const template = CHAR_TEMPLATES[type];
+
+        state.player.permanentAtkBonus = 0; 
+        state.player.permanentHpBonus = 0;
+        state.player.permanentSpeedBonus = 0; 
+        state.player.permanentApBonus = 0;
+
+        state.player.itemAtkBonus = 0;
+        state.player.itemHpBonus = 0;
+        state.player.itemSpeedBonus = 0;
+        state.player.itemApBonus = 0;
+        state.player.springDewDamageBonus = 0;
+        state.player.springDewTriggered = false;
+        state.penguinShieldTriggered = false;
+
+        if (template) {
+            state.player.maxHp = template.hp; state.player.hp = template.hp;
+            state.player.maxAp = template.ap; state.player.ap = template.ap;
+            state.player.atk = template.atk; state.player.speed = template.speed;
+        }
+
+        state.player.gold = 20; 
+        state.gold = 20; 
+        state.round = 1;
+        state.backpack = [];
+        state.skills = [];
+        state.stashItems = [];
+        state.selectedItem = null;
+
+        state.shopSlots = 5;       
+        state.shopPurchases = 0;   
+
+        initGrid();
+        
+        // ゲーム開始時にトーナメント構造を1回だけ生成（プレイヤーの初期ステータス反映のため、selectCharの後が良い）
+        initTournament();
+        
+        const overlay = document.getElementById('char-select-overlay');
+        if (overlay) overlay.style.display = 'none';
+        
+        playSound('craft');
+        startGatheringPhase();
+    }
+
+    function playerAction(dx, dy) {
+        if (state.gameOver || state.phase !== 'gathering') return;
+        const now = Date.now();
+        if (now - state.lastMoveTime < 150) return;
+        state.lastMoveTime = now;
+
+        // 一本道では右で進む。分岐では上下で選択してから右で進む。
+        const node = currentExplorationNode();
+        if (!node) return;
+        if (node.next.length > 1 && (dy !== 0)) {
+            state.explorationChoice = dy < 0 ? 0 : 1;
+            addLog(`🛣️ ${state.explorationChoice === 0 ? '上' : '下'}ルートを選択しました。→で進めます。`);
+            updateUI();
+            return;
+        }
+        if (dx > 0 || (node.next.length === 1 && dx !== 0)) moveExploration(1);
+    }
+
+    function triggerMagneticGathering() {
+        const px = state.player.x;
+        const py = state.player.y;
+        const dirs = [{x:0, y:-1}, {x:0, y:1}, {x:-1, y:0}, {x:1, y:0}];
+        
+        let magnetCount = state.backpack.filter(item => item.id === 'magnet').length;
+        let superMagnetCount = state.backpack.filter(item => item.id === 'super_magnet').length;
+        
+        if (magnetCount > 0 || superMagnetCount > 0) {
+            dirs.forEach(d => {
+                let nx = px + d.x;
+                let ny = py + d.y;
+                let cell = getCell(nx, ny);
+                if (cell > 0 && cell !== 13) {
+                    mineAt(nx, ny);
+                }
+                
+                if (superMagnetCount > 0) {
+                    let targetEnemy = state.enemies.find(e => e.active && e.x === nx && e.y === ny);
+                    if (targetEnemy) {
+                        targetEnemy.hp -= 5;
+                        addLog(`⚡ 超電磁マグネットの放電！ ${targetEnemy.type.name} に 5 ダメージ！`);
+                        let ex = targetEnemy.x * SIZE + SIZE/2, ey = targetEnemy.y * SIZE + SIZE/2;
+                        createParticles(ex, ey, "#f1c40f", 8);
+                        addFloatingText(ex, ey, `-5`, "#f1c40f");
+                        if (targetEnemy.hp <= 0) {
+                            targetEnemy.active = false;
+                            dropRewards(targetEnemy);
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    function mineAt(nx, ny) {
+        let cell = getCell(nx, ny); setCell(nx, ny, 0); 
+        let minedGold = Math.random() < 0.5 ? 1 : 0; 
+
+        if (minedGold > 0) {
+            if (state.environment === 'cave') minedGold *= 2;
+            state.gold += minedGold;
+            addFloatingText(nx*SIZE + SIZE/2, ny*SIZE + SIZE/2, `⛏️ 🪙+${minedGold}G`, "#f39c12");
+        } else {
+            addFloatingText(nx*SIZE + SIZE/2, ny*SIZE + SIZE/2, `⛏️`, "#bdc3c7");
+        }
+        createParticles(nx*SIZE + SIZE/2, ny*SIZE + SIZE/2, "#bdc3c7", 10);
+        triggerShake(4); playSound('mine');
+        addLog(minedGold > 0 ? `⛏️ 障害物を除去。🪙 +${minedGold} G 獲得！` : `⛏️ 障害物を除去しました。`);
+
+        updateUI();
+    }
+
+    function getGatheringPhaseCritStats() {
+        let currentCrit = state.player.crit || 5;
+        let Math_mult = 1.5;
+
+        let weapons = state.backpack.filter(item => item.type === 'weapon');
+        let hasLuckyRapier = false;
+        let totalAdjacentClovers = 0;
+
+        weapons.forEach(wpn => {
+            if (wpn.id === 'lucky_rapier') {
+                hasLuckyRapier = true;
+            }
+            let adjacentClovers = state.backpack.filter(other => 
+                other.id === 'clover_bookmark' && areItemsAdjacent(wpn, other)
+            ).length;
+            totalAdjacentClovers += adjacentClovers;
+        });
+
+        currentCrit += totalAdjacentClovers * 1;
+        if (hasLuckyRapier) {
+            currentCrit += 5; 
+            Math_mult = 1.8; 
+        }
+
+        return { crit: currentCrit, mult: Math_mult };
+    }
+
+    function executeAttackOnTarget(target, targetType, isLongRange = false) {
+        let baseDamage = state.player.atk;
+
+        let meatCount = state.backpack.filter(item => item.id === 'frozen_meat').length;
+        let rapierCount = state.backpack.filter(item => item.id === 'frost_rapier').length;
+        let fairyCount = state.backpack.filter(item => item.id === 'fairy_bottle').length;
+        let poisonDaggerCount = state.backpack.filter(item => item.id === 'poison_dagger').length;
+
+        if (target.frozen && rapierCount > 0) {
+            baseDamage = Math.round(baseDamage * 1.5);
+            addLog(`🗡️❄️ 氷雪 of レイピア！ 凍結した敵に会心の一撃！`);
+        }
+
+        let critStats = getGatheringPhaseCritStats();
+        let isCrit = Math.random() < (critStats.crit / 100);
+        if (isCrit) {
+            baseDamage = Math.round(baseDamage * critStats.mult);
+        }
+
+        target.hp -= baseDamage;
+        let rangeTag = isLongRange ? " (遠隔)" : "";
+        if (isCrit) {
+            addLog(`🎯 会心の一撃！ ${target.type.name} に攻撃${rangeTag}！ ${baseDamage} ダメージ！`);
+        } else {
+            addLog(`⚔️ ${target.type.name} に攻撃${rangeTag}！ ${baseDamage} ダメージ！`);
+        }
+        
+        let ex = target.x * SIZE + SIZE/2, ey = target.y * SIZE + SIZE/2;
+        createParticles(ex, ey, target.type.color, 20); 
+        addFloatingText(ex, ey, `-${baseDamage}`, isCrit ? "#ff7675" : "#f1c40f");
+        triggerShake(10); 
+        playSound('hit');
+
+        // ハニーロースト肉の効果（通常戦闘）：AP回復
+        let honeyRoastItem = state.backpack.find(item => item.id === 'honey_roast_meat');
+        if (honeyRoastItem) {
+            let baseApHeal = 3;
+            let adjacentSummons = state.backpack.filter(other => 
+                other.type === 'summon' && areItemsAdjacent(honeyRoastItem, other)
+            ).length;
+            let totalApHeal = baseApHeal + adjacentSummons * 3;
+            changePlayerAp(totalApHeal);
+            addLog(`🍖 ハニーロースト肉の効果！ APが ${totalApHeal} 回復しました。`);
+        }
+
+        if (fairyCount > 0) {
+            let fDmg = fairyCount * 5;
+            target.hp -= fDmg;
+            addLog("🧚‍♀️ 妖精の矢！ " + target.type.name + " に " + fDmg + " ダメージ！");
+            addFloatingText(ex, ey - 15, `-${fDmg}`, "#fd79a8");
+        }
+
+        if (poisonDaggerCount > 0) {
+            let pDmg = poisonDaggerCount * 5;
+            target.hp -= pDmg;
+            addLog(`🗡️💚 毒のダガー追加毒撃！ ${target.type.name} に ${pDmg} ダメージ！`);
+            addFloatingText(ex, ey + 15, `-${pDmg}`, "#2ecc71");
+        }
+
+        let freezeChance = (meatCount * 0.2) + (rapierCount * 0.4);
+        if (Math.random() < freezeChance && !target.frozen) {
+            target.frozen = true;
+            target.frozenDuration = 2; 
+            addLog(`❄️ ${target.type.name} がガチガチに凍りついた！`);
+        }
+
+        if (target.hp <= 0) {
+            target.active = false; dropRewards(target);
+        }
+        updateUI();
+    }
+
+    function dropRewards(enemy) {
+        let goldGained = Math.round(Math.random() * 2 + 1); 
+        state.gold += goldGained;
+        addLog(`⚔️ ${enemy.type.name}を撃破！ 🪙 +${goldGained} G 獲得。`);
+        let ex = enemy.x * SIZE + SIZE/2, ey = enemy.y * SIZE + SIZE/2;
+        addFloatingText(ex, ey, `🪙 +${goldGained} G`, "#f39c12");
+    }
+
+    function findPath(sx, sy, tx, ty) {
+        let dx = tx - sx;
+        let dy = ty - sy;
+        let steps = [];
+        if (Math.abs(dx) > Math.abs(dy)) {
+            steps.push({ x: sx + Math.sign(dx), y: sy });
+            steps.push({ x: sx, y: sy + Math.sign(dy) });
+        } else {
+            steps.push({ x: sx, y: sy + Math.sign(dy) });
+            steps.push({ x: sx + Math.sign(dx), y: sy });
+        }
+        for (let step of steps) {
+            let cell = getCell(step.x, step.y);
+            if (cell === 0 || cell === 13) {
+                return [step];
+            }
+        }
+        return null;
+    }
+
+    function enemyActionSingle(enemy) {
+        if (state.isDuelActive) return false; 
+
+        if (enemy.frozen) {
+            enemy.frozenDuration = (enemy.frozenDuration || 0) - 1;
+            if (enemy.frozenDuration <= 0) enemy.frozen = false;
+            return false;
+        }
+
+        let iceCount = state.backpack.filter(item => item.id === 'ice_crystal').length;
+        if (iceCount > 0) {
+            let d = Math.abs(enemy.x - state.player.x) + Math.abs(enemy.y - state.player.y);
+            if (d <= 1.5 && Math.random() < 0.5) {
+                return false; 
+            }
+        }
+
+        let targetX = state.player.x;
+        let targetY = state.player.y;
+        let distance = Math.abs(enemy.x - targetX) + Math.abs(enemy.y - targetY);
+        let searchRange = 5;
+        let nextStep = null;
+        let isChasing = false;
+
+        if (distance <= searchRange) {
+            let path = findPath(enemy.x, enemy.y, targetX, targetY);
+            if (path && path.length > 0) {
+                nextStep = path[0];
+                isChasing = true;
+            }
+        } else {
+            const dirs = [{ x: 0, y: -1 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 1, y: 0 }];
+            let shuffledDirs = [...dirs].sort(() => Math.random() - 0.5);
+            for (let d of shuffledDirs) {
+                let nx = enemy.x + d.x;
+                let ny = enemy.y + d.y;
+                let occupied = state.enemies.some(e => e.active && e.x === nx && e.y === ny);
+                if (!occupied && (getCell(nx, ny) === 0 || getCell(nx, ny) === 13)) {
+                    nextStep = { x: nx, y: ny };
+                    break;
+                }
+            }
+        }
+
+        if (nextStep) {
+            if (isChasing && nextStep.x === targetX && nextStep.y === targetY) {
+                let damage = enemy.atk;
+                
+                damage = Math.max(1, damage - getEternalSnowWarmerReduction());
+
+                state.player.hp = Math.max(0, state.player.hp - damage);
+                
+                addLog(`💥 ${enemy.type.name} から攻撃を受けました！ (-${damage} HP)`);
+                let px = state.player.x * SIZE + SIZE/2, py = state.player.y * SIZE + SIZE/2;
+                createParticles(px, py, "#f85149", 20);
+                addFloatingText(px, py, `-${damage} HP`, "#f85149");
+                triggerShake(12);
+                playSound('damage');
+
+                triggerPlayerCounterEffects(enemy, damage);
+
+                if (state.player.hp <= 0) { handleGameOver(); }
+                return true;
+            }
+
+            let cell = getCell(nextStep.x, nextStep.y);
+            if (cell > 0 && cell !== 13) return false;
+
+            enemy.x = nextStep.x;
+            enemy.y = nextStep.y;
+            return true;
+        }
+        return false;
+    }
+
+    function triggerPlayerCounterEffects(attacker, incomingDamage) {
+        let collarCount = state.backpack.filter(item => item.id === 'collar').length;
+        let spikeShieldCount = state.backpack.filter(item => item.id === 'spiked_shield').length;
+        let rottenCount = state.backpack.filter(item => item.id === 'rotten_banana').length;
+        let poisonCollarCount = state.backpack.filter(item => item.id === 'poison_collar').length;
+
+        let totalCounter = 0;
+        totalCounter += collarCount * 5;
+        totalCounter += spikeShieldCount * 10;
+        totalCounter += rottenCount * 6;
+        totalCounter += poisonCollarCount * 8;
+
+        // 万年雪のスパイクカラー：カウンター＋凍結スタン
+        let snowCollarCount = state.backpack.filter(item => item.id === 'snow_spike_collar').length;
+        if (snowCollarCount > 0) {
+            let isPenguin = state.player.charType === 'penguin';
+            let mult = isPenguin ? 2 : 1;
+            let counterDmg = 6 * mult * snowCollarCount;
+            totalCounter += counterDmg;
+
+            if (!attacker.frozen) {
+                attacker.frozen = true;
+                attacker.frozenDuration = 1;
+                addLog(`❄️ ${attacker.type.name} は冷気で体が凍りついた！`);
+            }
+        }
+
+        if (totalCounter > 0) {
+            attacker.hp -= totalCounter;
+            addLog(`🛡️ トゲと呪いの反撃！ ${attacker.type.name} に ${totalCounter} ダメージ！`);
+            let ex = attacker.x * SIZE + SIZE/2, ey = attacker.y * SIZE + SIZE/2;
+            createParticles(ex, ey, "#e74c3c", 8);
+            addFloatingText(ex, ey - 20, `💥 -${totalCounter}`, "#e74c3c");
+            if (attacker.hp <= 0) {
+                attacker.active = false;
+                dropRewards(attacker);
+            }
+        }
+
+        if (state.backpack.filter(item => item.id === 'cursed_piggy').length > 0) {
+            let dmg = 5;
+            addLog(`🐷💚 呪われた貯金箱が爆発した！ 猛毒が四散する！`);
+            state.enemies.forEach(e => {
+                if (e.active) {
+                    e.hp -= dmg;
+                    let ex = e.x * SIZE + SIZE/2, ey = e.y * SIZE + SIZE/2;
+                    createParticles(ex, ey, "#2ecc71", 10);
+                    addFloatingText(ex, ey, `💥 -${dmg}`, "#2ecc71");
+                    if (e.hp <= 0) {
+                        e.active = false;
+                        dropRewards(e);
+                    }
+                }
+            });
+        }
+    }
+
+    function updatePlayerStats() {
+        calculatePlayerStatsFromBackpack();
+    }
+
+    function updateUI() {
+        document.getElementById('ui-char').innerText = state.player.charType ? CHAR_TEMPLATES[state.player.charType].name : "未選択";
+
+        document.getElementById('ui-turn').innerText = state.round;
+        
+        let maxRoundVal = 1 * (tournament.step + 1);
+        const maxRoundSpan = document.getElementById('ui-turn-max');
+        if (maxRoundSpan) {
+            maxRoundSpan.innerText = maxRoundVal;
+        }
+
+        document.getElementById('ui-env').innerText = ENV_NAMES[state.environment] || "ノーマル";
+        document.getElementById('ui-hp').innerText = Math.round(state.player.hp);
+        document.getElementById('ui-maxhp').innerText = Math.round(state.player.maxHp);
+        document.getElementById('ui-ap').innerText = Math.round(state.player.ap);
+        document.getElementById('ui-maxap').innerText = Math.round(state.player.maxAp);
+        document.getElementById('ui-atk').innerText = Math.round(state.player.atk);
+        document.getElementById('ui-speed').innerText = Math.round(state.player.speed);
+        
+        document.getElementById('ui-crit').innerText = Math.round(state.player.crit || 5);
+        const skillCount = document.getElementById('ui-skill-count');
+        if (skillCount) skillCount.innerText = (state.skills || []).length;
+
+        const movesLeft = document.getElementById('ui-moves-left');
+        const movesMax = document.getElementById('ui-moves-max');
+        if (movesLeft) movesLeft.innerText = Math.max(0, state.gatheringMovesLeft ?? 0);
+        if (movesMax) movesMax.innerText = state.maxGatheringMoves ?? 20;
+        document.getElementById('gold-count').innerText = state.gold;
+        document.getElementById('round-count').innerText = state.round;
+
+        document.getElementById('reroll-btn').innerHTML = `<span style="font-size:1.1rem;">🔄</span> ショップ更新 (${state.rerollCost}G)`;
+
+        const actionBtn = document.getElementById('action-btn');
+        if (state.phase === 'prep') {
+            actionBtn.innerText = "🗺️ 探索へ進む";
+            actionBtn.className = "primary-btn";
+            document.getElementById('reroll-btn').style.display = 'none';
+        } else if (state.phase === 'shop') {
+            actionBtn.innerText = "⚔️ トーナメントへ進む";
+            actionBtn.className = "primary-btn";
+            document.getElementById('reroll-btn').style.display = 'block';
+        } else {
+            actionBtn.innerText = "⏩ 探索切り上げ";
+            actionBtn.className = "";
+            document.getElementById('reroll-btn').style.display = 'none';
+        }
+        updateMobileControls();
+    }
+
+    function updateDuelUI() {
+        document.getElementById('duel-turn-indicator').innerText = (state.duelTurnOwner === "player") ? "あなたのターン" : "相手のターン";
+        document.getElementById('duel-turn-indicator').style.background = (state.duelTurnOwner === "player") ? "#2ea043" : "#c0392b";
+
+        document.getElementById('duel-rival-name').innerText = `🔴 ${state.rival ? state.rival.name : "対戦相手"}`;
+        let rHp = state.rival ? state.rival.hp : 100;
+        let rMaxHp = state.rival ? state.rival.maxHp : 100;
+        document.getElementById('duel-rival-hp-text').innerText = `HP: ${rHp}/${rMaxHp}`;
+        document.getElementById('duel-rival-hp-bar').style.width = `${Math.max(0, (rHp / rMaxHp) * 100)}%`;
+
+        let rAp = state.rival ? state.rival.ap : 100;
+        let rMaxAp = state.rival ? state.rival.maxAp : 100;
+        document.getElementById('duel-rival-ap-text').innerText = `AP: ${rAp}/${rMaxAp}`;
+        document.getElementById('duel-rival-ap-bar').style.width = `${Math.max(0, (rAp / rMaxAp) * 100)}%`;
+
+        document.getElementById('duel-rival-intent-text').innerText = state.rivalIntent.name;
+
+        document.getElementById('duel-player-hp-text').innerText = `HP: ${state.player.hp}/${state.player.maxHp}`;
+        document.getElementById('duel-player-hp-bar').style.width = `${Math.max(0, (state.player.hp / state.player.maxHp) * 100)}%`;
+
+        document.getElementById('duel-player-ap-text').innerText = `AP: ${state.player.ap}/${state.player.maxAp}`;
+        document.getElementById('duel-player-ap-bar').style.width = `${Math.max(0, (state.player.ap / state.player.maxAp) * 100)}%`;
+
+        renderDuelActions();
+    }
+
+    function handleGameOver() {
+        state.gameOver = true;
+        if (enemyRealtimeTimer) { clearInterval(enemyRealtimeTimer); enemyRealtimeTimer = null; }
+
+        // 決戦フェーズ（デュエル画面）コントロールUIを確実に非表示にする
+        document.getElementById('duel-controls-overlay').style.display = 'none';
+        document.getElementById('tournament-overlay').style.display = 'none';
+
+        const overlay = document.getElementById('game-over-overlay');
+        overlay.style.display = 'flex';
+        document.getElementById('result-wave').innerText = state.round;
+        
+        const title = document.getElementById('game-result-title');
+        title.innerText = "GAME OVER";
+        
+        const p = overlay.querySelector('p');
+        if (state.isDuelActive) {
+            p.innerHTML = "トーナメント敗退...<br>ライバルの構成に圧倒されました。";
+        } else {
+            p.innerHTML = `生存ターン数: <span id="result-wave" style="color:#58a6ff; font-weight:bold;">${state.round}</span>`;
+        }
+        
+        // デュエル状態を安全に解除
+        state.isDuelActive = false;
+
+        const btn = overlay.querySelector('button');
+        btn.innerText = "🏠 キャラ選択（タイトル）へ戻る";
+        btn.onclick = () => {
+            overlay.style.display = 'none';
+            restartGameToTitle();
+        };
+
+        addLog(`💀 ゲームオーバー...`);
+    }
+
+    function restartGame() {
+        // (擬似トーナメント移行に伴い、タイトルへ戻る処理 restartGameToTitle を呼ぶように調整)
+        restartGameToTitle();
+    }
+
+    function restartGameToTitle() {
+        document.getElementById('game-over-overlay').style.display = 'none';
+        document.getElementById('victory-overlay').style.display = 'none';
+        document.getElementById('tournament-overlay').style.display = 'none';
+        document.getElementById('duel-controls-overlay').style.display = 'none'; // デュエルコントロールを確実に隠す
+        document.getElementById('char-select-overlay').style.display = 'flex';
+        
+        state.gameOver = false;
+        state.isDuelActive = false; // デュエル状態を解除
+        state.phase = 'prep';       // 描画フェーズを準備状態へ戻し、Canvas内のアリーナ表示を解除
+        state.player.charType = null;
+        state.wins = 0;
+        state.round = 1;
+        state.lives = 5;
+        state.gold = 20; 
+        state.backpack = [];
+
+        state.shopSlots = 5;       
+        state.shopPurchases = 0;   
+        state.player.springDewDamageBonus = 0;
+        state.player.springDewTriggered = false;
+        state.penguinShieldTriggered = false;
+        
+        initGrid();
+        updateUI();
+    }
+
+    // --- マウス・ドラッグ処理 ---
+    let mousePos = { x: 0, y: 0 };
+    let hoverCell = null;
+
+    function getMousePos(evt) {
+        const rect = canvas.getBoundingClientRect();
+        // レターボックス表示でキャンバスがCSS上で拡大縮小されていても、
+        // 内部座標(920x500基準)に正しく変換できるよう倍率を補正する。
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        return {
+            x: (evt.clientX - rect.left) * scaleX,
+            y: (evt.clientY - rect.top) * scaleY
+        };
+    }
+
+    // ===== タッチ操作対応 =====
+    // スマホ・タブレットでもショップ購入やバックパック配置を
+    // タップ／ドラッグで行えるよう、タッチイベントを既存のマウス処理へ転送する。
+    function forwardTouchAsMouse(e, type) {
+        const touch = e.changedTouches && e.changedTouches[0];
+        if (!touch) return;
+        const mouseEvent = new MouseEvent(type, {
+            clientX: touch.clientX,
+            clientY: touch.clientY,
+            bubbles: true,
+            cancelable: true
+        });
+        canvas.dispatchEvent(mouseEvent);
+        e.preventDefault();
+    }
+    canvas.addEventListener('touchstart', e => forwardTouchAsMouse(e, 'mousedown'), { passive: false });
+    canvas.addEventListener('touchmove', e => forwardTouchAsMouse(e, 'mousemove'), { passive: false });
+    canvas.addEventListener('touchend', e => forwardTouchAsMouse(e, 'mouseup'), { passive: false });
+
+    canvas.addEventListener('mousedown', (e) => {
+        initAudio();
+        const pos = getMousePos(e);
+        
+        if (state.phase !== 'prep' && state.phase !== 'shop') return;
+
+        if (state.phase === 'prep' && state.activeUnlockKeys > 0) {
+            const col = Math.floor((pos.x - GRID_START_X) / GRID_SIZE);
+            const row = Math.floor((pos.y - GRID_START_Y) / GRID_SIZE);
+            if (col >= 0 && col < GRID_COLS && row >= 0 && row < GRID_ROWS) {
+                triggerLockedCellUnlock(col, row);
+                return;
+            }
+        }
+
+        if (state.phase === 'prep') for (let fus of state.availableFusions) {
+            const btnX = GRID_START_X + (fus.itemA.x + fus.itemB.x) * GRID_SIZE / 2 + GRID_SIZE / 2 - 15;
+            const btnY = GRID_START_Y + (fus.itemA.y + fus.itemB.y) * GRID_SIZE / 2 + GRID_SIZE / 2 - 15;
+            if (pos.x >= btnX && pos.x <= btnX + 55 && pos.y >= btnY && pos.y <= btnY + 25) {
+                executeFusion(fus);
+                return;
+            }
+        }
+
+        for (let i = 0; i < state.shopSlots; i++) {
+            const row = Math.floor(i / 5);
+            const col = i % 5;
+            const x = SHOP_START_X + col * 85;
+            const y = SHOP_START_Y + row * 85;
+            const slot = state.shop[i];
+
+            if (slot && !slot.bought && pos.x >= x && pos.x <= x + 70 && pos.y >= y && pos.y <= y + 70) {
+                buySkill(i);
+                return;
+            }
+        }
+
+        if (state.phase !== 'prep') return;
+        state.backpack.forEach((item, index) => {
+            const dim = getItemDimensions(item);
+            const x = GRID_START_X + item.x * GRID_SIZE;
+            const y = GRID_START_Y + item.y * GRID_SIZE;
+            const w = dim.w * GRID_SIZE;
+            const h = dim.h * GRID_SIZE;
+
+            if (pos.x >= x && pos.x <= x + w && pos.y >= y && pos.y <= y + h) {
+                state.draggedItem = item;
+                state.dragSource = 'backpack';
+                state.dragSourceIndex = index;
+                state.dragOffset = {
+                    x: pos.x - x,
+                    y: pos.y - y
+                };
+                state.backpack = state.backpack.filter(i => i.instanceId !== item.instanceId);
+                playSound('click');
+            }
+        });
+
+    });
+
+    window.addEventListener('contextmenu', (e) => {
+        if (state.draggedItem) {
+            e.preventDefault();
+            state.draggedItem.rotated = !state.draggedItem.rotated;
+            playSound('click');
+        }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        const pos = getMousePos(e);
+        mousePos = pos;
+
+        const gCol = Math.floor((pos.x - GRID_START_X) / GRID_SIZE);
+        const gRow = Math.floor((pos.y - GRID_START_Y) / GRID_SIZE);
+        if (gCol >= 0 && gCol < GRID_COLS && gRow >= 0 && gRow < GRID_ROWS) {
+            hoverCell = { col: gCol, row: gRow };
+        } else {
+            hoverCell = null;
+        }
+
+        updateTooltip(pos);
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+        if (!state.draggedItem) return;
+        const pos = getMousePos(e);
+
+        const col = Math.floor((pos.x - state.dragOffset.x - GRID_START_X + GRID_SIZE/2) / GRID_SIZE);
+        const row = Math.floor((pos.y - state.dragOffset.y - GRID_START_Y + GRID_SIZE/2) / GRID_SIZE);
+
+        const check = checkCollision(state.draggedItem, col, row);
+
+        if (check === 'ok') {
+            state.draggedItem.x = col;
+            state.draggedItem.y = row;
+            state.backpack.push(state.draggedItem);
+
+            if (state.dragSource === 'shop') {
+                state.gold -= state.draggedItem.cost;
+                state.shop[state.dragSourceIndex].bought = true;
+                playSound('buy');
+                
+                if (state.draggedItem.id === 'key') {
+                    state.backpack = state.backpack.filter(i => i.instanceId !== state.draggedItem.instanceId);
+                    state.activeUnlockKeys++;
+                } else if (state.draggedItem.id === 'royal_key') {
+                    state.backpack = state.backpack.filter(i => i.instanceId !== state.draggedItem.instanceId);
+                    state.activeUnlockKeys += 2; 
+                }
+                
+                recordShopPurchase();
+            } else {
+                playSound('click');
+            }
+
+            state.draggedItem = null;
+            scanFusions();
+            updateUI();
+            return;
+        }
+
+        rollbackDrag();
+    });
+
+    function rollbackDrag() {
+        if (!state.draggedItem) return;
+
+        if (state.dragSource === 'backpack') {
+            state.backpack.push(state.draggedItem);
+        }
+        state.draggedItem = null;
+        scanFusions();
+        updateUI();
+    }
+
+    function updateTooltip(pos) {
+        let hoverItem = null;
+
+        if (state.phase === 'prep' || state.phase === 'shop') {
+            for (let i = 0; i < state.shopSlots; i++) {
+                const row = Math.floor(i / 5);
+                const col = i % 5;
+                const x = SHOP_START_X + col * 85;
+                const y = SHOP_START_Y + row * 85;
+                if (pos.x >= x && pos.x <= x + 70 && pos.y >= y && pos.y <= y + 70) {
+                    if (state.shop[i] && !state.shop[i].bought) hoverItem = state.shop[i].skillTemplate;
+                }
+            }
+
+            state.backpack.forEach(item => {
+                const dim = getItemDimensions(item);
+                const x = GRID_START_X + item.x * GRID_SIZE;
+                const y = GRID_START_Y + item.y * GRID_SIZE;
+                if (pos.x >= x && pos.x <= x + dim.w * GRID_SIZE && pos.y >= y && pos.y <= y + dim.h * GRID_SIZE) {
+                    hoverItem = item;
+                }
+            });
+        }
+
+        if (hoverItem) {
+            applySynergies(state.backpack); 
+            tooltip.style.display = 'block';
+            tooltip.style.left = (pos.x + 20) + 'px';
+            tooltip.style.top = (pos.y + 10) + 'px';
+
+            let statsStr = "";
+            if (hoverItem.type === 'skill') {
+                const parts = [];
+                if (hoverItem.hp) parts.push(`❤️ 最大HP +${hoverItem.hp}`);
+                if (hoverItem.atk) parts.push(`⚔️ 攻撃力 +${hoverItem.atk}`);
+                if (hoverItem.speed) parts.push(`🏃 速度 ${hoverItem.speed >= 0 ? '+' : ''}${hoverItem.speed}`);
+                if (hoverItem.ap) parts.push(`⚡ 最大AP +${hoverItem.ap}`);
+                if (hoverItem.crit) parts.push(`🎯 会心率 +${hoverItem.crit}%`);
+                statsStr = parts.join("<br>") + (parts.length ? "<br>" : "");
+            } else if (hoverItem.damage) {
+                const bonus = hoverItem.bonusDamage || 0;
+                const totalDmg = hoverItem.damage + bonus;
+                const bonusText = bonus > 0 ? ` <span style="color:#2ecc71;">(+${bonus})</span>` : "";
+                statsStr = `⚔️ 攻撃力: ${totalDmg}${bonusText}<br>`;
+            } else if (hoverItem.shieldGain) {
+                const bonus = hoverItem.bonusShield || 0;
+                const totalShield = hoverItem.shieldGain + bonus;
+                const bonusText = bonus > 0 ? ` <span style="color:#2ecc71;">(+${bonus})</span>` : "";
+                statsStr = `🛡️ シールド: ${totalShield}${bonusText}<br>`;
+            }
+
+            const costText = hoverItem.cost ? `<span style="color:#f1c40f;">🪙 ${hoverItem.cost}G</span>` : "";
+
+            let typeJa = {
+                weapon: "武器 ⚔️",
+                shield: "防具・盾 🛡️",
+                food: "食べ物 🍏",
+                potion: "ポーション 🧪",
+                summon: "召喚 🧚",
+                utility: "便利ユーティリティ 🗝️",
+                passive: "パッシブ能力 ⚙️",
+                skill: "スキル ✨"
+            }[hoverItem.type] || "その他";
+
+            let synergyText = hoverItem.type === 'skill'
+                ? `<div style="color:#9b59b6; font-weight:bold; margin-bottom:4px; font-size:0.7rem;">✨ 習得するとプレイヤーのステータスが上昇します</div>`
+                : (hoverItem.adjacentSynergy ? `<div style="color:#f1c40f; font-weight:bold; margin-bottom:4px; font-size:0.7rem;">⚠️ 隣接シナジー効果対象アイテム</div>` : "");
+
+            tooltip.innerHTML = `
+                <div class="tooltip-title">
+                    <span>${hoverItem.icon} ${hoverItem.name}</span>
+                    ${costText}
+                </div>
+                <div style="color:#8b949e; margin-bottom:4px; font-size:0.7rem;">種別: <strong style="color:#58a6ff;">${typeJa}</strong></div>
+                ${synergyText}
+                <div style="font-size:0.75rem; color:#f39c12; margin-bottom:4px;">${statsStr}</div>
+                <div class="tooltip-desc">${hoverItem.desc}</div>
+            `;
+        } else {
+            tooltip.style.display = 'none';
+        }
+    }
+
+    function triggerShake(amount) { shake = amount; }
+
+    ITEM_TEMPLATES.spring_dew.desc = "清らかな雫。最大AP+5。\n隣接する食べ物の数だけ、決戦時のターン開始時にAPが2回復。\n🐸かえる装備時性能2倍、AP満タン時次の攻撃ダメ+5。";
+
+    function draw() {
+        ctx.globalAlpha = 1.0; 
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (state.phase === 'prep' || state.phase === 'shop') {
+            drawPreparationPhase();
+        } else if (state.phase === 'gathering') {
+            drawGatheringPhase();
+        } else if (state.phase === 'duel') {
+            drawDuelPhase();
+        }
+    }
+
+    // --- 探索フェーズのキャンバス描画 ---
+    function drawPreparationPhase() {
+        ctx.fillStyle = "#161b22";
+        ctx.strokeStyle = "#30363d";
+        ctx.lineWidth = 1;
+
+        // バックパックのマス目は非表示にして、アイテムだけを表示する。
+        // 内部の座標・当たり判定はこれまで通り維持。
+        if (state.activeUnlockKeys > 0) {
+            for (let c = 0; c < GRID_COLS; c++) {
+                for (let r = 0; r < GRID_ROWS; r++) {
+                    if (!state.gridUnlocked[`${c},${r}`]) {
+                        const x = GRID_START_X + c * GRID_SIZE;
+                        const y = GRID_START_Y + r * GRID_SIZE;
+                        ctx.fillStyle = "rgba(241, 196, 15, 0.10)";
+                        ctx.fillRect(x, y, GRID_SIZE, GRID_SIZE);
+                    }
+                }
+            }
+        }
+
+        ctx.fillStyle = "#0d1117";
+        ctx.fillRect(SHOP_START_X - 15, SHOP_START_Y - 35, 460, 230);
+        ctx.strokeStyle = "#30363d";
+        ctx.strokeRect(SHOP_START_X - 15, SHOP_START_Y - 35, 460, 230);
+        
+        ctx.fillStyle = "#f1c40f";
+        ctx.font = "bold 14px sans-serif";
+        
+        let shopTitle = state.skillShopUnlocked ? "✨ スキルショップ" : "🔒 スキルショップ（未解禁）";
+        if (state.shopSlots < 10) {
+            let nextIn = 6 - (state.shopPurchases % 6);
+            shopTitle += ` (累計購入: ${state.shopPurchases}回 | 次の枠まであと ${nextIn} 回)`;
+        } else {
+            shopTitle += ` (累計購入: ${state.shopPurchases}回 | 最大10枠到達！)`;
+        }
+        ctx.fillText(shopTitle, SHOP_START_X, SHOP_START_Y - 15);
+        ctx.fillStyle = "#d8b4fe";
+        ctx.font = "10px sans-serif";
+        ctx.fillText("クリックで習得・ステータス上昇", SHOP_START_X + 205, SHOP_START_Y - 15);
+
+        for (let i = 0; i < state.shopSlots; i++) {
+            const row = Math.floor(i / 5);
+            const col = i % 5;
+            const x = SHOP_START_X + col * 85;
+            const y = SHOP_START_Y + row * 85;
+            const slot = state.shop[i];
+
+            ctx.fillStyle = "#161b22";
+            ctx.fillRect(x, y, 70, 70);
+
+            if (slot && !slot.bought) {
+                ctx.strokeStyle = slot.skillTemplate ? "#9b59b6" : "#30363d";
+                ctx.lineWidth = 2;
+            } else {
+                ctx.strokeStyle = (slot && slot.locked) ? "#f1c40f" : "#30363d";
+                ctx.lineWidth = 1;
+            }
+            ctx.strokeRect(x, y, 70, 70);
+            ctx.lineWidth = 1; 
+
+            if (slot) {
+                if (slot.bought) {
+                    ctx.fillStyle = "#30363d";
+                    ctx.font = "bold 14px sans-serif";
+                    ctx.textAlign = "center";
+                    ctx.fillText("SOLD OUT", x + 35, y + 40);
+                    ctx.textAlign = "left";
+                } else {
+                    const skill = slot.skillTemplate;
+                    if (skill) {
+                        drawSkillShopCard(skill, x, y, 70, 70);
+                        if (slot.locked) {
+                            ctx.fillStyle = "#f1c40f";
+                            ctx.font = "bold 8px sans-serif";
+                            ctx.textAlign = "left";
+                            ctx.fillText("LOCK", x + 4, y + 10);
+                        }
+                    }
+                }
+            }
+        }
+
+        applySynergies(state.backpack);
+        state.backpack.forEach(item => {
+            const dim = getItemDimensions(item);
+            const x = GRID_START_X + item.x * GRID_SIZE + 4;
+            const y = GRID_START_Y + item.y * GRID_SIZE + 4;
+            const w = dim.w * GRID_SIZE - 8;
+            const h = dim.h * GRID_SIZE - 8;
+            drawItemCard(item, x, y, w, h);
+        });
+
+        drawSynergyConnections();
+        drawFusionBadges();
+
+        if (state.draggedItem) {
+            const dim = getItemDimensions(state.draggedItem);
+            const w = dim.w * GRID_SIZE;
+            const h = dim.h * GRID_SIZE;
+            const drawX = mousePos.x - state.dragOffset.x;
+            const drawY = mousePos.y - state.dragOffset.y;
+
+            const gCol = Math.floor((drawX - GRID_START_X + GRID_SIZE/2) / GRID_SIZE);
+            const gRow = Math.floor((drawY - GRID_START_Y + GRID_SIZE/2) / GRID_SIZE);
+            const check = checkCollision(state.draggedItem, gCol, gRow);
+
+            if (gCol >= 0 && gCol < GRID_COLS && gRow >= 0 && gRow < GRID_ROWS) {
+                ctx.fillStyle = check === 'ok' ? "rgba(46, 204, 113, 0.3)" : "rgba(231, 76, 60, 0.3)";
+                ctx.fillRect(GRID_START_X + gCol * GRID_SIZE, GRID_START_Y + gRow * GRID_SIZE, w, h);
+            }
+
+            ctx.save();
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = state.draggedItem.color;
+            drawItemCard(state.draggedItem, drawX, drawY, w, h);
+            ctx.restore();
+        }
+
+        if (state.activeUnlockKeys > 0) {
+            ctx.fillStyle = "#f1c40f";
+            ctx.font = "bold 13px sans-serif";
+            ctx.fillText(`🗝️ カギ拡張有効中: 黄色いマスをクリックしてバッグ解放！ (残り: ${state.activeUnlockKeys}箇所)`, GRID_START_X, GRID_START_Y - 14);
+        }
+    }
+
+    // --- 探索・採掘フェーズのキャンバス描画 ---
+    function drawGatheringPhase() {
+        ctx.fillStyle = '#0d1117';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // 背景
+        ctx.fillStyle = '#17251b';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#22382a';
+        for (let x=0; x<canvas.width; x+=48) ctx.fillRect(x, 0, 2, canvas.height);
+
+        const path = state.explorationPath || [];
+        const current = state.explorationNode || 0;
+        const visibleStart = Math.max(0, current - 3);
+        const visibleEnd = Math.min(path.length - 1, current + 7);
+        const positions = {};
+        let px = 110, py = 290;
+        const gap = 88;
+        for (let i=visibleStart; i<=visibleEnd; i++) {
+            if (i === current) { positions[i] = {x:px,y:py}; }
+            else if (!positions[i]) positions[i] = {x:px,y:py};
+            px += gap;
+        }
+        // 分岐部分を見やすく配置
+        const branches = path.filter(n => n.next && n.next.length > 1);
+        branches.forEach(b => {
+            if (positions[b.index]) {
+                const base=positions[b.index];
+                const n1=b.next[0], n2=b.next[1];
+                if (positions[n1]) positions[n1]={x:base.x+gap,y:base.y-75};
+                if (positions[n2]) positions[n2]={x:base.x+gap,y:base.y+75};
+            }
+        });
+
+        ctx.lineWidth = 8;
+        ctx.lineCap = 'round';
+        path.forEach(n => {
+            if (!positions[n.index]) return;
+            n.next.forEach((to, idx) => {
+                if (!positions[to]) return;
+                ctx.strokeStyle = (n.index===current && idx===state.explorationChoice && n.next.length>1) ? '#ffd34d' : '#687d70';
+                ctx.beginPath(); ctx.moveTo(positions[n.index].x, positions[n.index].y); ctx.lineTo(positions[to].x, positions[to].y); ctx.stroke();
+            });
+        });
+
+        path.forEach(n => {
+            const p=positions[n.index]; if (!p) return;
+            ctx.beginPath(); ctx.arc(p.x,p.y,30,0,Math.PI*2);
+            ctx.fillStyle = n.index===current ? '#3fb950' : (n.visited ? '#4d5d52' : '#263b2c');
+            ctx.fill();
+            ctx.strokeStyle = n.index===current ? '#f1c40f' : '#9aa9a0';
+            ctx.lineWidth = n.index===current ? 4 : 2; ctx.stroke();
+            ctx.font='28px Arial'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillStyle='#fff'; ctx.fillText(n.icon,p.x,p.y);
+            ctx.font='bold 12px Arial'; ctx.fillStyle='#fff'; ctx.fillText(n.name,p.x,p.y+46);
+            if (n.visited && n.index!==current) { ctx.font='16px Arial'; ctx.fillText('✓',p.x+22,p.y-22); }
+        });
+
+        ctx.fillStyle='rgba(13,17,23,.92)'; ctx.fillRect(20,18,880,62);
+        ctx.fillStyle='#fff'; ctx.textAlign='left'; ctx.font='bold 18px Arial';
+        ctx.fillText('🗺️ 探索ルート',35,43);
+        ctx.font='14px Arial'; ctx.fillStyle='#58a6ff';
+        ctx.fillText(`👣 残り移動 ${state.gatheringMovesLeft} / ${state.maxGatheringMoves}`,35,66);
+        ctx.fillStyle='#f1c40f'; ctx.textAlign='right'; ctx.fillText('→ 進む　↑/↓ 分岐を選ぶ',885,43);
+        ctx.fillStyle='#8b949e'; ctx.fillText('分岐ではルートを選択してから →',885,66);
+
+        const node=currentExplorationNode();
+        if (node && node.next.length>1) {
+            ctx.fillStyle='rgba(88,166,255,.14)'; ctx.fillRect(300,395,320,70);
+            ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.font='bold 15px Arial'; ctx.fillText(`🛣️ ${node.name}：ルートを選択`,460,420);
+            ctx.font='14px Arial'; ctx.fillText(`↑ ${path[node.next[0]].name}　　↓ ${path[node.next[1]].name}`,460,446);
+        }
+    }
+
+    // --- 決戦（タイマン）フェーズのキャンバス描画 ---
+    function drawDuelPhase() {
+        ctx.fillStyle = "#11141a";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let i = state.particles.length - 1; i >= 0; i--) {
+            let p = state.particles[i];
+            p.x += p.vx; p.y += p.vy; p.life -= p.decay;
+            if (p.life <= 0) {
+                state.particles.splice(i, 1);
+            } else {
+                ctx.fillStyle = p.color; ctx.globalAlpha = p.life;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        for (let i = state.floatingTexts.length - 1; i >= 0; i--) {
+            let t = state.floatingTexts[i];
+            t.y -= 1; t.life -= t.decay;
+            if (t.life <= 0) {
+                state.floatingTexts.splice(i, 1);
+            } else {
+                ctx.fillStyle = t.color; ctx.font = "bold 18px Arial"; ctx.textAlign = "center";
+                ctx.globalAlpha = t.life; ctx.fillText(t.text, t.x, t.y);
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        ctx.save();
+        ctx.translate(250, 250);
+        if (state.playerGuarding) {
+            ctx.strokeStyle = "#3498db";
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(0, 0, 45, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        ctx.font = "72px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(CHAR_TEMPLATES[state.player.charType].icon, 0, 0);
+        ctx.restore();
+
+        if (state.rival && state.rival.active) {
+            ctx.save();
+            ctx.translate(670, 250);
+            if (state.rival.frozen) {
+                ctx.fillStyle = "rgba(116, 185, 255, 0.35)";
+                ctx.beginPath();
+                ctx.arc(0, 0, 65, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.font = "96px Arial";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(state.rival.icon, 0, 0);
+            ctx.restore();
+        }
+
+        ctx.fillStyle = "#e74c3c";
+        ctx.font = "bold 44px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("VS", 460, 250);
+        ctx.textAlign = "left";
+    }
+
+    // 外部画像や絵文字フォントに依存しないスキル画像
+    function drawSkillIcon(skill, cx, cy, size) {
+        if (!skill) return;
+        const id = skill.id || '';
+        const r = size * 0.46;
+        ctx.save(); ctx.translate(cx, cy);
+        ctx.lineWidth = Math.max(2, size * 0.08); ctx.lineCap='round'; ctx.lineJoin='round';
+        ctx.fillStyle='#241832'; ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fill();
+        ctx.strokeStyle='#b56cff'; ctx.stroke();
+        switch(id) {
+            case 'iron_body': ctx.fillStyle='#e85d75'; ctx.beginPath();ctx.arc(-r*.28,0,r*.24,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(r*.28,0,r*.24,0,Math.PI*2);ctx.fill();ctx.fillRect(-r*.42,-r*.03,r*.84,r*.25);break;
+            case 'vitality': ctx.fillStyle='#ff4f70';ctx.beginPath();ctx.moveTo(0,r*.5);ctx.bezierCurveTo(-r*.95,-r*.05,-r*.52,-r*.62,0,-r*.2);ctx.bezierCurveTo(r*.52,-r*.62,r*.95,-r*.05,0,r*.5);ctx.fill();break;
+            case 'power':case 'mighty_power':case 'warrior_spirit': ctx.strokeStyle='#f1c40f';ctx.lineWidth=Math.max(3,size*.09);ctx.beginPath();ctx.moveTo(-r*.48,r*.48);ctx.lineTo(r*.38,-r*.38);ctx.stroke();ctx.strokeStyle='#fff';ctx.beginPath();ctx.moveTo(-r*.22,r*.45);ctx.lineTo(r*.48,-r*.25);ctx.stroke();ctx.strokeStyle='#d99b55';ctx.beginPath();ctx.moveTo(-r*.38,r*.2);ctx.lineTo(-r*.05,r*.53);ctx.stroke();break;
+            case 'swift':case 'sonic_step': ctx.fillStyle='#4fc3ff';ctx.beginPath();ctx.moveTo(r*.12,-r*.6);ctx.lineTo(-r*.38,r*.05);ctx.lineTo(-r*.02,r*.02);ctx.lineTo(-r*.18,r*.62);ctx.lineTo(r*.48,-r*.16);ctx.lineTo(r*.08,-r*.12);ctx.closePath();ctx.fill();break;
+            case 'mana':case 'arcane_core':case 'quick_mind': ctx.fillStyle='#9b7cff';ctx.beginPath();ctx.moveTo(0,-r*.58);ctx.lineTo(r*.42,-r*.18);ctx.lineTo(r*.25,r*.52);ctx.lineTo(-r*.25,r*.52);ctx.lineTo(-r*.42,-r*.18);ctx.closePath();ctx.fill();ctx.strokeStyle='#e7d8ff';ctx.stroke();break;
+            case 'critical_eye': ctx.strokeStyle='#7bdff2';ctx.beginPath();ctx.ellipse(0,0,r*.68,r*.38,0,0,Math.PI*2);ctx.stroke();ctx.fillStyle='#ffcc33';ctx.beginPath();ctx.arc(0,0,r*.18,0,Math.PI*2);ctx.fill();break;
+            case 'lucky_star': ctx.fillStyle='#ffd34d';ctx.beginPath();for(let k=0;k<10;k++){const a=-Math.PI/2+k*Math.PI/5,rr=k%2===0?r*.58:r*.24,px=Math.cos(a)*rr,py=Math.sin(a)*rr;if(k===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}ctx.closePath();ctx.fill();break;
+            case 'balanced': ctx.strokeStyle='#fff';ctx.beginPath();ctx.moveTo(0,-r*.52);ctx.lineTo(0,r*.45);ctx.moveTo(-r*.55,-r*.2);ctx.lineTo(r*.55,-r*.2);ctx.stroke();ctx.beginPath();ctx.moveTo(-r*.48,-r*.18);ctx.lineTo(-r*.65,r*.22);ctx.lineTo(-r*.3,r*.22);ctx.closePath();ctx.stroke();ctx.beginPath();ctx.moveTo(r*.48,-r*.18);ctx.lineTo(r*.3,r*.22);ctx.lineTo(r*.65,r*.22);ctx.closePath();ctx.stroke();break;
+            case 'guardian_spirit': ctx.fillStyle='#4aa3ff';ctx.beginPath();ctx.moveTo(0,-r*.58);ctx.lineTo(r*.5,-r*.35);ctx.lineTo(r*.38,r*.3);ctx.quadraticCurveTo(0,r*.62,-r*.38,r*.3);ctx.lineTo(-r*.5,-r*.35);ctx.closePath();ctx.fill();ctx.strokeStyle='#dff3ff';ctx.stroke();break;
+            case 'champion': ctx.fillStyle='#ffd34d';ctx.beginPath();ctx.moveTo(-r*.58,r*.35);ctx.lineTo(-r*.42,-r*.35);ctx.lineTo(-r*.05,0);ctx.lineTo(r*.2,-r*.42);ctx.lineTo(r*.55,r*.35);ctx.closePath();ctx.fill();ctx.fillRect(-r*.58,r*.35,r*1.16,r*.16);break;
+            case 'limit_break': ctx.fillStyle='#ff6b35';ctx.beginPath();for(let k=0;k<12;k++){const a=-Math.PI/2+k*Math.PI/6,rr=k%2===0?r*.62:r*.32,px=Math.cos(a)*rr,py=Math.sin(a)*rr;if(k===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}ctx.closePath();ctx.fill();break;
+            case 'double_strike': ctx.strokeStyle='#ff9f43';ctx.lineWidth=Math.max(2,size*.08);ctx.beginPath();ctx.moveTo(-r*.5,r*.45);ctx.lineTo(r*.35,-r*.4);ctx.stroke();ctx.beginPath();ctx.moveTo(-r*.5,-r*.05);ctx.lineTo(r*.35,r*.5);ctx.stroke();break;
+            case 'power_smash': ctx.fillStyle='#ff5252';ctx.beginPath();for(let k=0;k<8;k++){const a=-Math.PI/2+k*Math.PI/4,rr=k%2===0?r*.62:r*.28,px=Math.cos(a)*rr,py=Math.sin(a)*rr;if(k===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}ctx.closePath();ctx.fill();break;
+            case 'life_drain_strike': ctx.fillStyle='#e84393';ctx.beginPath();ctx.moveTo(0,r*.55);ctx.bezierCurveTo(-r*.55,r*.05,-r*.3,-r*.55,0,-r*.15);ctx.bezierCurveTo(r*.3,-r*.55,r*.55,r*.05,0,r*.55);ctx.fill();break;
+            default: ctx.fillStyle='#d8b4fe';ctx.font=`bold ${size*.42}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('S',0,0);
+        }
+        ctx.restore();
+    }
+
+    function drawSkillShopCard(skill, x, y, w, h) {
+        if (!skill) return;
+        const grad=ctx.createLinearGradient(x,y,x,y+h);grad.addColorStop(0,'#35204d');grad.addColorStop(1,'#1f1729');
+        ctx.fillStyle=grad;ctx.fillRect(x,y,w,h);ctx.strokeStyle='#b56cff';ctx.lineWidth=2;ctx.strokeRect(x,y,w,h);ctx.lineWidth=1;
+        drawSkillIcon(skill,x+w/2,y+19,Math.min(w,h)*.55);
+        ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.fillStyle='#f5eaff';ctx.font='bold 9px sans-serif';
+        let name=skill.name||'スキル';if(name.length>7)name=name.slice(0,7)+'…';ctx.fillText(name,x+w/2,y+39);
+        const parts=[];if(skill.hp)parts.push(`HP+${skill.hp}`);if(skill.atk)parts.push(`攻+${skill.atk}`);if(skill.speed)parts.push(`速+${skill.speed}`);if(skill.ap)parts.push(`AP+${skill.ap}`);if(skill.crit)parts.push(`会+${skill.crit}%`);
+        if(parts.length===0 && skill.tag) parts.push(skill.tag);
+        ctx.fillStyle=skill.duelAction?'#ff9f43':'#d8b4fe';ctx.font='bold 7px sans-serif';ctx.fillText(parts.slice(0,2).join(' '),x+w/2,y+52);
+        ctx.fillStyle='#f1c40f';ctx.font='bold 10px sans-serif';const displayCost = Math.max(1, Math.ceil(skill.cost * (1 + (state.skillPriceLevel || 0) * 0.10))); ctx.fillText(`$ ${displayCost}G`,x+w/2,y+66);
+        ctx.textAlign='left';ctx.textBaseline='alphabetic';
+    }
+
+    function drawItemCard(item, x, y, w, h) {
+        // 特別処理：黄金のマスターキーなどのロイヤルアイテム
+        if (item.id === 'royal_key') {
+            let grad = ctx.createLinearGradient(x, y, x + w, y + h);
+            grad.addColorStop(0, "#ffe066");
+            grad.addColorStop(0.5, "#d4af37");
+            grad.addColorStop(1, "#aa7c11");
+            ctx.fillStyle = grad;
+            ctx.fillRect(x, y, w, h);
+            
+            ctx.strokeStyle = "#ffd700";
+            ctx.lineWidth = 3;
+            ctx.strokeRect(x, y, w, h);
+            ctx.lineWidth = 1;
+
+            ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
+            ctx.fillRect(x + 2, y + 2, w - 4, h - 4);
+
+            ctx.fillStyle = "#ffffff";
+            ctx.font = `bold ${Math.min(w, h) * 0.6}px sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(item.icon, x + w / 2, y + h / 2);
+
+            ctx.textAlign = "left";
+            ctx.textBaseline = "alphabetic";
+            return;
+        }
+
+        // --- 1. アイテム種類に応じた配色設定 ---
+        let baseColor = "#58a6ff"; 
+        let glowColor = "rgba(88, 166, 255, 0.1)";
+        let typeIcon = "";
+
+        switch (item.type) {
+            case 'weapon':
+                baseColor = "#e74c3c"; 
+                glowColor = "rgba(231, 76, 60, 0.15)";
+                typeIcon = "⚔️";
+                break;
+            case 'shield':
+                baseColor = "#3498db"; 
+                glowColor = "rgba(52, 152, 219, 0.15)";
+                typeIcon = "🛡️";
+                break;
+            case 'food':
+                baseColor = "#2ecc71"; 
+                glowColor = "rgba(46, 204, 113, 0.15)";
+                typeIcon = "🍏";
+                break;
+            case 'potion':
+                baseColor = "#9b59b6"; 
+                glowColor = "rgba(155, 89, 182, 0.15)";
+                typeIcon = "🧪";
+                break;
+            case 'summon':
+                baseColor = "#fd79a8"; 
+                glowColor = "rgba(253, 121, 168, 0.15)";
+                typeIcon = "🧚";
+                break;
+            case 'utility':
+                baseColor = "#f1c40f"; 
+                glowColor = "rgba(241, 196, 15, 0.15)";
+                typeIcon = "🗝️";
+                break;
+            case 'passive':
+                baseColor = "#95a5a6"; 
+                glowColor = "rgba(149, 165, 166, 0.15)";
+                typeIcon = "⚙️";
+                break;
+            case 'skill':
+                baseColor = "#9b59b6";
+                glowColor = "rgba(155, 89, 182, 0.22)";
+                typeIcon = "✨";
+                break;
+        }
+
+        // --- 2. カードのベース背景とグラデーション描画 ---
+        ctx.fillStyle = "#1f232a";
+        ctx.fillRect(x, y, w, h);
+
+        let fillGrad = ctx.createRadialGradient(x + w/2, y + h/2, 5, x + w/2, y + h/2, Math.max(w, h));
+        fillGrad.addColorStop(0, glowColor);
+        fillGrad.addColorStop(1, "rgba(31, 35, 42, 0)");
+        ctx.fillStyle = fillGrad;
+        ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
+
+        // --- 3. 枠線の描画 ---
+        ctx.strokeStyle = baseColor;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, w, h);
+        ctx.lineWidth = 1;
+
+        // --- 4. 隣接系（シナジー対象）の装飾 ---
+        if (item.adjacentSynergy) {
+            ctx.save();
+            ctx.strokeStyle = "#f1c40f";
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 2]);
+            ctx.strokeRect(x + 3, y + 3, w - 6, h - 6);
+            ctx.restore();
+
+            ctx.fillStyle = "#f1c40f";
+            ctx.font = "11px sans-serif";
+            ctx.fillText("✨", x + w - 14, y + 12);
+        }
+
+        // --- 5. 左上の「種類ミニバッジ」描画 (カードサイズがある程度大きい場合のみ) ---
+        if (w >= 35 && h >= 35) {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+            ctx.fillRect(x + 2, y + 2, 14, 14);
+            ctx.strokeStyle = baseColor;
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(x + 2, y + 2, 14, 14);
+
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "9px Arial";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(typeIcon, x + 9, y + 9);
+        }
+
+        // --- 6. 中央アイコンの描画 ---
+        ctx.fillStyle = "#ffffff";
+        ctx.font = `${Math.min(w, h) * 0.55}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(item.icon, x + w / 2, y + h / 2);
+
+        if (item.type === 'skill' && w >= 45 && h >= 45) {
+            ctx.fillStyle = "#d8b4fe";
+            ctx.font = "bold 8px sans-serif";
+            ctx.textAlign = "center";
+            const skillParts = [];
+            if (item.hp) skillParts.push(`HP+${item.hp}`);
+            if (item.atk) skillParts.push(`攻+${item.atk}`);
+            if (item.speed) skillParts.push(`速+${item.speed}`);
+            if (item.ap) skillParts.push(`AP+${item.ap}`);
+            if (item.crit) skillParts.push(`会+${item.crit}%`);
+            ctx.fillText(skillParts.slice(0, 2).join(" "), x + w / 2, y + h - 5);
+        }
+
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
+
+        // 右下の回転マーク
+        if (state.phase === 'prep' && (item.w !== item.h) && (w < 80)) {
+            ctx.fillStyle = "#8b949e";
+            ctx.font = "9px sans-serif";
+            ctx.fillText("🔄R", x + 4, y + h - 5);
+        }
+    }
+
+    function drawSynergyConnections() {
+        ctx.save();
+        ctx.strokeStyle = "#f1c40f";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+
+        for (let i = 0; i < state.backpack.length; i++) {
+            for (let j = i + 1; j < state.backpack.length; j++) {
+                const itemA = state.backpack[i];
+                const itemB = state.backpack[j];
+
+                const isWhetstoneSynergy = (itemA.id === 'whetstone' && itemB.type === 'weapon') || (itemB.id === 'whetstone' && itemA.type === 'weapon');
+                const isGarlicSynergy = (itemA.id === 'garlic' && itemB.type === 'shield') || (itemB.id === 'garlic' && itemA.type === 'shield');
+                const isPanSynergy = (itemA.id === 'pan' && itemB.type === 'food') || (itemB.id === 'pan' && itemA.type === 'food');
+                const isGarlicPanSynergy = (itemA.id === 'garlic_pan' && itemB.type === 'food') || (itemB.id === 'garlic_pan' && itemA.type === 'food');
+                const isCloverSynergy = (itemA.id === 'clover_bookmark' && itemB.type === 'weapon') || (itemB.id === 'clover_bookmark' && itemA.type === 'weapon');
+
+                if ((isWhetstoneSynergy || isGarlicSynergy || isPanSynergy || isGarlicPanSynergy || isCloverSynergy) && areItemsAdjacent(itemA, itemB)) {
+                    const dimA = getItemDimensions(itemA);
+                    const dimB = getItemDimensions(itemB);
+                    const xA = GRID_START_X + itemA.x * GRID_SIZE + (dimA.w * GRID_SIZE) / 2;
+                    const yA = GRID_START_Y + itemA.y * GRID_SIZE + (dimA.h * GRID_SIZE) / 2;
+                    const xB = GRID_START_X + itemB.x * GRID_SIZE + (dimB.w * GRID_SIZE) / 2;
+                    const yB = GRID_START_Y + itemB.y * GRID_SIZE + (dimB.h * GRID_SIZE) / 2;
+
+                    ctx.beginPath();
+                    ctx.moveTo(xA, yA);
+                    ctx.lineTo(xB, yB);
+                    ctx.stroke();
+                }
+            }
+        }
+        ctx.restore();
+    }
+
+    function drawFusionBadges() {
+        state.availableFusions.forEach(fus => {
+            const xA = GRID_START_X + fus.itemA.x * GRID_SIZE + (getItemDimensions(fus.itemA).w * GRID_SIZE) / 2;
+            const yA = GRID_START_Y + fus.itemA.y * GRID_SIZE + (getItemDimensions(fus.itemA).h * GRID_SIZE) / 2;
+            const xB = GRID_START_X + fus.itemB.x * GRID_SIZE + (getItemDimensions(fus.itemB).w * GRID_SIZE) / 2;
+            const yB = GRID_START_Y + fus.itemB.y * GRID_SIZE + (getItemDimensions(fus.itemB).h * GRID_SIZE) / 2;
+
+            const midX = (xA + xB) / 2;
+            const midY = (yA + yB) / 2;
+
+            ctx.fillStyle = "#2ecc71";
+            ctx.fillRect(midX - 25, midY - 12, 55, 22);
+            ctx.strokeStyle = "#ffffff";
+            ctx.strokeRect(midX - 25, midY - 12, 55, 22);
+
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 11px sans-serif";
+            ctx.fillText("🔨 合成", midX - 20, midY + 4);
+        });
+    }
+
+    let lastTime = performance.now();
+    function gameLoop(now) {
+        let dt = (now - lastTime) / 1000;
+        lastTime = now;
+
+        if (state.phase === 'gathering') {
+            for (let i = state.particles.length - 1; i >= 0; i--) {
+                let p = state.particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= p.decay;
+                if (p.life <= 0) state.particles.splice(i, 1);
+            }
+
+            for (let i = state.floatingTexts.length - 1; i >= 0; i--) {
+                let t = state.floatingTexts[i];
+                t.y -= 1;
+                t.life -= t.decay;
+                if (t.life <= 0) state.floatingTexts.splice(i, 1);
+            }
+        }
+
+        if (state.phase === 'duel') {
+            for (let i = state.particles.length - 1; i >= 0; i--) {
+                let p = state.particles[i];
+                p.x += p.vx; p.y += p.vy; p.life -= p.decay;
+                if (p.life <= 0) state.particles.splice(i, 1);
+            }
+
+            for (let i = state.floatingTexts.length - 1; i >= 0; i--) {
+                let t = state.floatingTexts[i];
+                t.y -= 1; t.life -= t.decay;
+                if (t.life <= 0) state.floatingTexts.splice(i, 1);
+            }
+        }
+
+        if (shake > 0) {
+            shake *= 0.9;
+            if (shake < 0.5) shake = 0;
+        }
+
+        draw();
+        requestAnimationFrame(gameLoop);
+    }
+
+    function createParticles(x, y, color, count = 12) {
+        if (state.particles.length > 150) return; 
+        for (let i = 0; i < count; i++) {
+            state.particles.push({
+                x, y,
+                vx: (Math.random() - 0.5) * 5,
+                vy: (Math.random() - 0.5) * 5,
+                color,
+                life: 1.0,
+                decay: Math.random() * 0.04 + 0.02,
+                size: Math.random() * 4 + 2
+            });
+        }
+    }
+
+    function addFloatingText(x, y, text, color = "#fff") {
+        state.floatingTexts.push({ x, y, text, color, life: 1.0, decay: 0.025 });
+    }
+
+    window.addEventListener('keydown', e => {
+        const key = e.key.toLowerCase();
+        if (state.gameOver || state.isDuelActive) return; 
+
+        if (state.phase === 'gathering') {
+            if (key === 'arrowup' || key === 'w') playerAction(0, -1);
+            else if (key === 'arrowdown' || key === 's') playerAction(0, 1);
+            else if (key === 'arrowright' || key === 'd') playerAction(1, 0);
+        }
+
+        if (state.phase === 'shop' && key === 'r') {
+            if (state.draggedItem) {
+                state.draggedItem.rotated = !state.draggedItem.rotated;
+                playSound('click');
+            }
+        }
+    });
+
+    function toggleMenu(){ state.menuOpen=!state.menuOpen; const o=document.getElementById('menu-overlay'); if(o)o.style.display=state.menuOpen?'flex':'none'; const p=state.player,el=document.getElementById('menu-status'); if(el)el.innerHTML=`<b>キャラクター：</b>${p.charType?CHAR_TEMPLATES[p.charType].name:'未選択'}<br><b>ゴールド：</b>🪙 ${state.gold}G<br><b>HP：</b>❤️ ${Math.round(p.hp)} / ${Math.round(p.maxHp)}<br><b>AP：</b>⚡ ${Math.round(p.ap)} / ${Math.round(p.maxAp)}<br><b>攻撃：</b>⚔️ ${Math.round(p.atk)}　<b>速度：</b>🏃 ${Math.round(p.speed)}<br><b>スキル：</b>${(state.skills||[]).length}個　<b>購入：</b>${state.skillShopUnlocked?'解禁済み':'未解禁'}`; }
+    function mobileExploreInput(d){ if(state.phase!=='gathering')return; if(d==='up')playerAction(0,-1); else if(d==='down')playerAction(0,1); else playerAction(1,0); }
+    function updateMobileControls(){ const m=document.getElementById('mobile-controls'); if(m)m.style.display=((('ontouchstart' in window)||navigator.maxTouchPoints>0)&&state.phase==='gathering')?'flex':'none'; }
+    window.addEventListener('resize',updateMobileControls); window.addEventListener('orientationchange',updateMobileControls);
+    function init() { requestAnimationFrame(gameLoop); updateMobileControls(); }
+
+    init();
+</script>
+</body>
+</html>
